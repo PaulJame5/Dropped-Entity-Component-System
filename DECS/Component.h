@@ -12,9 +12,15 @@ class Component
 public:
 	Component() {}
 	virtual ~Component() {};
+	//virtual Component(const& Component);
+
+	virtual void init(int belongsToID) = 0;
 	
 	int belongsToID() { return belongsTo; }
-	virtual void setBelongsToID(int id) = 0; 
+	void setBelongsToID(int id) { belongsTo = id; };
+	void setActive(bool active) { isActive = active; }
+
 protected:
 	int belongsTo = -1;
+	bool isActive = true;
 };
