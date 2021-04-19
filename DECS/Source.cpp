@@ -1,6 +1,8 @@
 #include <iostream>
 #include "DerivedSystem.h"
-#include <chrono>
+//#include "Entity.h"
+#include "Timer.h"
+#include "decs.h"
 #include <string>
 
 void TestAddDefault(); 
@@ -10,169 +12,115 @@ void TestRemove();
 void TestDelete();
 void TestUpdate();
 
+
 DerivedSystem derivedSystem;
-int amount = 100000;
+DerivedSystem derivedSystem2;
+int amountOfComponents = 1000000;
+int amountOfTests = 100;
 
 int main()
 {
-	DerivedSystem::reserveConstantpoolSize(amount+1);
 	system("pause");
-	TestAddDefault();
-	std::cout << "Pool size: " << derivedSystem.getRecycablePoolSize() << std::endl;
-	std::cout << "cap: " << derivedSystem.getRecycalblePool().capacity() << std::endl;
-	std::cout << "capP: " << DerivedSystem::poolCapacity << std::endl;
-	std::cout << "Reserved: " << DerivedSystem::reservedSize << std::endl;
-	std::cout << "Reserved: " << derivedSystem.reservedSize << std::endl;
-
-	TestRemove();
-	std::cout << "Pool size: " << derivedSystem.getRecycablePoolSize() << std::endl;
-	std::cout << "cap: " << derivedSystem.getRecycalblePool().capacity() << std::endl;
-	std::cout << "capP: " << DerivedSystem::poolCapacity << std::endl;
-
-	TestAddPooling();
-	//derivedSystem.clearRecycablePool();
-	std::cout << "Pool size: " << derivedSystem.getRecycablePoolSize() << std::endl;
-	std::cout << "cap: " << derivedSystem.getRecycalblePool().capacity() << std::endl;
-	std::cout << "capP: " << DerivedSystem::poolCapacity << std::endl;
+	Timer addDefault = Timer("Add Default"); 
+	Timer remove =Timer("Remove");
+	Timer addFromPool =Timer("Add From Pool");
+	Timer deleteComponent =Timer("Delete"); 
+	Timer passCopyTimer =Timer("Construct Copy"); 
+	Timer updateTimer =Timer("Update");
 
 
-	TestDelete();
-	std::cout << "Entitiy size" << DerivedSystem::getEntities().size() << std::endl;
-	std::cout << "Pool size: " << derivedSystem.getRecycablePoolSize() << std::endl;
-	std::cout << "cap: " << derivedSystem.getRecycalblePool().capacity() << std::endl;
-	std::cout << "capP: " << DerivedSystem::poolCapacity << std::endl;
 
-	TestAddDefault();
-	std::cout << "Pool size: " << derivedSystem.getRecycablePoolSize() << std::endl;
-	std::cout << "cap: " << derivedSystem.getRecycalblePool().capacity() << std::endl;
-	std::cout << "capP: " << DerivedSystem::poolCapacity << std::endl;
+	for (int i = 0; i < amountOfTests; i++)
+	{
+		// Remove before starting again
+		TestDelete();
 
-	TestDelete();
-	std::cout << "Pool size: " << derivedSystem.getRecycablePoolSize() << std::endl;
-	std::cout << "cap: " << derivedSystem.getRecycalblePool().capacity() << std::endl;
-	std::cout << "capP: " << DerivedSystem::poolCapacity << std::endl;
+		addDefault.Start();
+		TestAddDefault();
+		addDefault.Stop();
 
-	TestAddCopy();
-	std::cout << "Pool size: " << derivedSystem.getRecycablePoolSize() << std::endl;
-	std::cout << "cap: " << derivedSystem.getRecycalblePool().capacity() << std::endl;
-	std::cout << "capP: " << DerivedSystem::poolCapacity << std::endl;
+		remove.Start();
+		TestRemove();
+		remove.Stop();
 
-	TestUpdate();
+		addFromPool.Start();
+		TestAddPooling();
+		addFromPool.Stop();
 
-	std::cout << "cap: " << derivedSystem.getRecycalblePool().capacity() << std::endl;
-	std::cout << "capP: " << DerivedSystem::poolCapacity << std::endl;
+		deleteComponent.Start();
+		TestDelete();
+		deleteComponent.Stop();
+
+		passCopyTimer.Start();
+		TestAddCopy();
+		passCopyTimer.Stop();
+
+		updateTimer.Start();
+		TestUpdate();
+		updateTimer.Stop();
+
+		std::cout << "finished iter: " << i << std::endl;
+	}
+		addDefault.~Timer();
+		remove.~Timer();
+		addFromPool.~Timer();
+		deleteComponent.~Timer();
+		passCopyTimer.~Timer();
+		updateTimer.~Timer();
+
+
 	system("pause");
 	return 0;
 }
 
 void TestAddDefault()
 {
-	std::cout << std::endl;
-	std::cout << std::endl;
-	std::cout << "================== Test Add Default ==================" << std::endl;
-	std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
-
-	// Stuff
-	for (int i = 0; i < amount; i++)
+	for (int i = 0; i < amountOfComponents; i++)
 	{
 		derivedSystem.addComponent(i);
 	}
-
-	std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
-	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	std::cout << "Add Default: " << amount << " components took " << milliseconds.count() << " milliseconds." << std::endl;
-
-	std::cout << "======================================================" << std::endl;
 }
 
 void TestAddPooling()
 {
-	std::cout << std::endl;
-	std::cout << std::endl;
-	std::cout << "================== Test Add Pooling ==================" << std::endl;
-	std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
-
-	// Stuff
-	for (int i = 0; i < amount; i++)
+	for (int i = 0; i < amountOfComponents; i++)
 	{
 		derivedSystem.addComponent(i);
 	}
 
-	std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
-	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	std::cout << "Add Pooling: " << amount << " components took " << milliseconds.count() << " milliseconds." << std::endl;
-	std::cout << "======================================================" << std::endl;
 }
 
 void TestAddCopy()
 {
-	std::cout << std::endl;
-	std::cout << std::endl;
-	std::cout << "================== Test Add Copy ==================" << std::endl;
-	std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
-	DerivedComponent derivedComp;
-
 	// Stuff
-	for (int i = 0; i < amount; i++)
+	for (int i = 0; i < amountOfComponents; i++)
 	{
+		DerivedComponent derivedComp;
 		derivedSystem.addComponent(i, derivedComp);
 	}
-
-	std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
-	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	std::cout << "Add Copy: " << amount << " components took " << milliseconds.count() << " milliseconds." << std::endl;
-	std::cout << "======================================================" << std::endl;
 }
 
 void TestRemove()
 {
-	std::cout << std::endl;
-	std::cout << std::endl;
-	std::cout << "================== Test Remove ==================" << std::endl;
-	std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
-
 	// Stuff
-	for (int i = 0; i < amount; i++)
+	for (int i = 0; i < amountOfComponents; i++)
 	{
-		derivedSystem.removeComponent(i);
+		derivedSystem.removeComponents(i);
 	}
-
-	std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
-	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	std::cout << "Remove: " << amount << " components took " << milliseconds.count() << " milliseconds." << std::endl;
-	std::cout << "======================================================" << std::endl;
-
 }
 
 void TestDelete()
 {
-	std::cout << std::endl;
-	std::cout << std::endl;
-	std::cout << "================== Test Delete ==================" << std::endl;
-	std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
-
 	// Stuff
-	for (int i = 0; i < amount; i++)
+	for (int i = 0; i < amountOfComponents; i++)
 	{
-		derivedSystem.destroyComponent(i);
+		derivedSystem.destroyComponents(i);
 	}
 
-	std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
-	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	std::cout << "Destroy: " << amount << " components took " << milliseconds.count() << " milliseconds." << std::endl;
-	std::cout << "======================================================" << std::endl;
 }
 
 
 void TestUpdate()
 {
-	std::cout << std::endl;
-	std::cout << std::endl;
-	std::cout << "================== Test Update ==================" << std::endl;
-	std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
 	derivedSystem.update();
-	std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
-	auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-	std::cout << "Update: " << amount << " components took " << milliseconds.count() << " milliseconds." << std::endl;
-	std::cout << "======================================================" << std::endl;
 }
