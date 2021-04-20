@@ -5,11 +5,10 @@
 *	the Entity to an ID assigner type role instead of as a cotainer.
 */
 #pragma once
-
-#pragma once
 #include <map>
-#include <list>
+#include <deque>
 #include <vector>
+#include <iostream>
 
 // Forward Declaration for ISystem
 class Entity;
@@ -72,7 +71,7 @@ inline bool Component::isActive()
 // End Component
 //=====================================================================
 
-// Base class of ISystem. Used by Entity for when storing a list of systems to check when deleting entities.
+// Base class of ISystem. Used by Entity for when storing a deque of systems to check when deleting entities.
 class ISystemBase
 {
 public:
@@ -83,22 +82,11 @@ public:
 
 	virtual void destroyComponents(int entityId) = 0;
 
-	int getSystemID() { return systemID; };
-
-private:
-	static int systemID;
-	static int assignableSystemID;
+	virtual int getSystemID() = 0;
 };
-int ISystemBase::assignableSystemID = 0;
-int ISystemBase::systemID = -1;
 
 inline ISystemBase::ISystemBase()
 {
-	if (systemID != -1)
-	{
-		return;
-	}
-	systemID = assignableSystemID++;
 }
 
 inline ISystemBase::~ISystemBase()
@@ -110,7 +98,7 @@ inline ISystemBase::~ISystemBase()
 //===================================================================
 
 /// <summary>
-/// class to be iherited by user defined Systems. ISystem has a list of generic functions to be used with DECS.
+/// class to be iherited by user defined Systems. ISystem has a deque of generic functions to be used with DECS.
 /// </summary>
 template<class T>
 class ISystem : ISystemBase
@@ -137,29 +125,43 @@ public:
 	void destroyComponents(int entityId);
 	void destroyComponentAt(int entityId, int position);
 
+	void cleanUpEntities();
+
 	bool hasComponent(int entityId);
 
 	// Returns first element null/blank if empty
 	T& getComponent(int entityId);
 
-	// Returns list of components type T attached to entity
+	// Returns deque of components type T attached to entity
 	std::vector<T>& getComponents(int entityId);
 
 
 	std::map<int, std::vector<T>>& getEntities();
 
-	std::list<T>& getRecycalblePool();
+	void setPoolMaximumSize(int maximumSize);
+	std::deque<T>& getRecycalblePool();
 	int getPoolSize();
 	void resetPool();
 
+	int getSystemID();
+
 protected:
 	static std::map<int, std::vector<T>> entities;
-	static std::list<T> recycablePool;
+	static std::deque<T> recycablePool;
+
+private:
+	static int systemID;
+	static int maxPoolSize;
 };
 
 template<class T>
 inline ISystem<T>::ISystem()
 {
+	if (systemID != -1)
+	{
+		return;
+	}
+	systemID = Entity::createNewSystemID();
 	Entity::addSystem(*this);
 }
 
@@ -172,7 +174,22 @@ template<class T>
 std::map<int, std::vector<T>> ISystem<T>::entities = std::map<int, std::vector<T>>();
 
 template<class T>
-std::list<T> ISystem<T>::recycablePool = std::list<T>();
+std::deque<T> ISystem<T>::recycablePool = std::deque<T>();
+
+template<class T>
+int ISystem<T>::maxPoolSize = 10000;
+
+
+template<class T>
+int ISystem<T>::systemID = -1;
+
+
+template<class T>
+inline int ISystem<T>::getSystemID()
+{
+	return systemID;
+}
+
 
 /// <summary>
 /// Adds Component of type T with it's default Constructor to given Entity with ID.
@@ -182,17 +199,18 @@ std::list<T> ISystem<T>::recycablePool = std::list<T>();
 template<class T>
 inline void ISystem<T>::addComponent(int entityId)
 {
-	std::vector<T>& componentList = entities[entityId];
+	std::vector<T>& componentdeque = entities[entityId];
 	if (recycablePool.empty() == false)
 	{
-		recycablePool.front().setBelongsToID(entityId);
-		componentList.emplace_back(std::move(recycablePool.front()));
-		recycablePool.pop_front();
+		recycablePool.back().setBelongsToID(entityId);
+		componentdeque.emplace_back(std::move(recycablePool.back()));
+		recycablePool.pop_back();
+		componentdeque.back().initialise();
 		return;
 	}
 
-	componentList.emplace_back();
-	componentList.back().setBelongsToID(entityId);
+	componentdeque.emplace_back();
+	componentdeque.back().setBelongsToID(entityId);
 }
 
 /// <summary>
@@ -217,21 +235,14 @@ inline void ISystem<T>::removeComponent(int entityId)
 	{
 		return;
 	}
-	std::vector<T>& componentList = entities[entityId];
+	std::vector<T>& componentdeque = entities[entityId];
 
-	recycablePool.emplace_back(std::move(componentList.back()));
-	componentList.pop_back();
-	componentList.shrink_to_fit();
-
-	if (componentList.size() < 1)
+	if (recycablePool.size() < maxPoolSize)
 	{
-		entities.erase(entityId);
-
-		if (entities.size() == 0)
-		{
-			entities = std::map<int, std::vector<T>>();
-		}
+		recycablePool.emplace_back(std::move(componentdeque.back()));
 	}
+	componentdeque.pop_back();
+	componentdeque.shrink_to_fit();
 }
 
 /// <summary>
@@ -248,18 +259,20 @@ inline void ISystem<T>::removeComponents(int entityId)
 	}
 
 	// Cache optimisation
-	std::vector<T>& componentList = entities[entityId];
+	std::vector<T>& componentdeque = entities[entityId];
 
-	while (componentList.size() > 0)
+	while (componentdeque.size() > 0)
 	{
-		recycablePool.emplace_back(std::move(componentList.back()));
-		componentList.erase(componentList.end() - 1);
+		if (recycablePool.size() < maxPoolSize)
+		{
+			recycablePool.emplace_back(std::move(componentdeque.back()));
+		}
+		componentdeque.erase(componentdeque.end() - 1);
 	}
-	entities.erase(entityId);
 }
 
 /// <summary>
-///	Destroys last component added to an entity without adding it to the recycablePool list.
+///	Destroys last component added to an entity without adding it to the recycablePool deque.
 /// </summary>
 template<class T>
 inline void ISystem<T>::destroyComponent(int entityId)
@@ -269,20 +282,14 @@ inline void ISystem<T>::destroyComponent(int entityId)
 		return;
 	}
 	// Cache optimisation
-	std::vector<T>& componentList = entities[entityId];
+	std::vector<T>& componentdeque = entities[entityId];
 
-	componentList.erase(componentList.end() - 1);
+	componentdeque.erase(componentdeque.end() - 1);
 
-	if (componentList.size() == 0)
+	if (componentdeque.size() == 0)
 	{
-		componentList.clear();
-		componentList.shrink_to_fit();
-		entities.erase(entityId);
-
-	}
-	if (entities.size() == 0)
-	{
-		entities.clear();
+		componentdeque.clear();
+		componentdeque.shrink_to_fit();
 	}
 }
 
@@ -300,19 +307,14 @@ inline void ISystem<T>::destroyComponentAt(int entityId, int position)
 		return;
 	}
 	// Cache optimisation
-	std::vector<T>& componentList = entities[entityId];
+	std::vector<T>& componentdeque = entities[entityId];
 
-	if (componentList.size() < position + 1)
+	if (componentdeque.size() < position + 1)
 	{
 		return;
 	}
 
-	componentList.erase(componentList.at(position));
-
-	if (componentList.size() == 0)
-	{
-		entities.erase(entityId);
-	}
+	componentdeque.erase(componentdeque.begin() + position);
 }
 
 /// <summary>
@@ -329,11 +331,34 @@ inline void ISystem<T>::destroyComponents(int entityId)
 		return;
 	}
 	// Cache optimisation
-	std::vector<T>& componentList = entities[entityId];
+	std::vector<T>& componentdeque = entities[entityId];
 
-	componentList.erase(componentList.begin(), componentList.end());
-	componentList.shrink_to_fit();
-	entities.erase(entityId);
+	componentdeque.erase(componentdeque.begin(), componentdeque.end());
+	componentdeque.shrink_to_fit();
+}
+
+/// <summary>
+/// Deletes all components and removes entity from map without assigning objects to a pool 
+/// </summary>
+/// <typeparam name="T"></typeparam>
+/// <param name="entityId"></param>
+/// <returns></returns>
+template<class T>
+inline void ISystem<T>::cleanUpEntities()
+{
+	typename std::map<int, std::vector<T> >::reverse_iterator it = entities.rbegin();
+
+	for (; it != entities.rend(); ++it)
+	{
+		if (it->second.size() == 0)
+		{
+			entities.erase(it->first);
+		}
+	}
+	if (entities.empty())
+	{
+		entities.clear();
+	}
 }
 
 /// <summary>
@@ -397,6 +422,15 @@ inline int ISystem<T>::getPoolSize()
 }
 
 /// <summary>
+///	Sets Maximum Size of the Pool. Defaults at 10000.
+/// </summary>
+template<class T>
+inline void ISystem<T>::setPoolMaximumSize(int maximumSize)
+{
+	maxPoolSize = maximumSize;
+}
+
+/// <summary>
 /// Returns reference to ISystem entites.
 /// Entities are stored in a map with the Key being an int to identify entites, 
 /// value is the components considered attached to an enitity. 
@@ -413,13 +447,13 @@ inline std::map<int, std::vector<T>>& ISystem<T>::getEntities()
 /// <param name=""></param>
 /// <returns></returns>
 template<class T>
-inline std::list<T>& ISystem<T>::getRecycalblePool()
+inline std::deque<T>& ISystem<T>::getRecycalblePool()
 {
 	return recycablePool;
 }
 
 /// <summary>
-/// Resets pool of ISystem to size 0
+/// Resets pool of ISystem to size 0 and frees it from memory
 /// </summary>
 /// <param name=""></param>
 /// <returns></returns>
@@ -427,6 +461,7 @@ template<class T>
 inline void ISystem<T>::resetPool()
 {
 	recycablePool.resize(0);
+	recycablePool.shrink_to_fit();
 }
 // End ISystem
 
@@ -448,6 +483,7 @@ public:
 
 	static void destroyEntity(int entityID, bool poolComponents = true);
 
+	static int createNewSystemID();
 
 private:
 	Entity();
@@ -455,7 +491,8 @@ private:
 	static std::vector<int> customAssignedIds;
 
 	static std::vector<std::reference_wrapper<ISystemBase>> systems;
-
+	static int assignableSystemID;
+	//static int maxEntities;
 };
 
 
@@ -478,14 +515,14 @@ inline int Entity::createNewEnitityID(bool immediate)
 		nextAssignableID++;
 	}
 	return nextAssignableID++;
-};
+}
 
 /// <summary>
 /// This removes a System from Entity::systems vector. 
 /// Returns true if it is found and erased. False if it is now found.
-/// Systems are automatically added to the list on construction. 
+/// Systems are automatically added to the deque on construction. 
 /// </summary>
-/// <param name="system"> "The ISystem that you wish to have removed from the list."</param>
+/// <param name="system"> "The ISystem that you wish to have removed from the deque."</param>
 /// <returns>int of newly created Entity</returns>
 inline int Entity::createNewEnitityWithID(int id, bool immediate)
 {
@@ -500,13 +537,13 @@ inline int Entity::createNewEnitityWithID(int id, bool immediate)
 	}
 	customAssignedIds.emplace_back(id);
 	return id;
-};
+}
 
 /// <summary>
 /// Used by ISystem automatically upon construction of an ISystem.
 /// Returns true if it is added successfully, false if it does not get added.
 /// </summary>
-/// <param name="system"> "The ISystem that you wish to have added to the list."</param>
+/// <param name="system"> "The ISystem that you wish to have added to the deque."</param>
 /// <returns>description</returns>
 inline bool Entity::addSystem(ISystemBase& system)
 {
@@ -521,15 +558,15 @@ inline bool Entity::addSystem(ISystemBase& system)
 	}
 	systems.emplace_back(system);
 	return true;
-};
+}
 
 
 /// <summary>
 /// This removes a System from Entity::systems vector. 
 /// Returns true if it is found and erased. False if it is now found.
-/// Systems are automatically added to the list on construction. 
+/// Systems are automatically added to the deque on construction. 
 /// </summary>
-/// <param name="system"> "The ISystem that you wish to have removed from the list."</param>
+/// <param name="system"> "The ISystem that you wish to have removed from the deque."</param>
 /// <returns>true on success, false on failure</returns>
 inline bool Entity::removeSystem(ISystemBase& system)
 {
@@ -580,7 +617,20 @@ inline void Entity::destroyEntity(int entityID, bool poolComponents)
 	}
 }
 
+
+/// <summary>
+/// Returns ID of a new entity then increments next assignable id. 
+/// This is called by ISystems on construction if they have no id assigned
+/// </summary>
+/// <returns>id of entity</returns>
+inline int Entity::createNewSystemID()
+{
+	return nextAssignableID++;
+}
+
 std::vector<std::reference_wrapper<ISystemBase>> Entity::systems = std::vector<std::reference_wrapper<ISystemBase>>();
+
+int Entity::assignableSystemID = 0;
 int Entity::nextAssignableID = 0;
 std::vector<int> Entity::customAssignedIds = std::vector<int>();
 // End Entity
