@@ -1,9 +1,8 @@
 #pragma once
-//#include "ISystem.h"
 #include "decs.h"
 #include "DerivedComponent.h"
 
-class DerivedSystem : public ISystem<DerivedComponent>
+class DerivedSystem : public decs::ISystem<DerivedComponent>
 {
 public:
 	DerivedSystem() {}

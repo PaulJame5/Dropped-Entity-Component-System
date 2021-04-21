@@ -1,10 +1,9 @@
 #pragma once
-//#include "Component.h"
 #include "decs.h"
 #include <string>
 
 
-class DerivedComponent : public Component
+class DerivedComponent : public decs::Component
 {
 public:
 	DerivedComponent();
