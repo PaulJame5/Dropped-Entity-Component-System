@@ -6,6 +6,7 @@
 */
 #pragma once
 #include <map>
+#include <deque>
 #include <vector>
 #include <iostream>
 #include <stdlib.h>     /* malloc, calloc, realloc, free */
@@ -171,8 +172,8 @@ namespace decs {
 
 		std::map<int, std::vector<T>>& getEntities();
 
-		void setPoolMaximumSize(int maximumSize, bool reserveMemory = false);
-		std::vector<T>& getRecycalblePool();
+		void setPoolMaximumSize(int maximumSize);
+		std::deque<T>& getRecycalblePool();
 		int getPoolSize();
 		void resetPool();
 
@@ -180,7 +181,7 @@ namespace decs {
 
 	protected:
 		static std::map<int, std::vector<T>> entities;
-		static std::vector<T> recycablePool;
+		static std::deque<T> recycablePool;
 
 	private:
 		static int systemID;
@@ -205,7 +206,7 @@ namespace decs {
 	std::map<int, std::vector<T>> ISystem<T>::entities = std::map<int, std::vector<T>>();
 
 	template<class T>
-	std::vector<T> ISystem<T>::recycablePool;
+	std::deque<T> ISystem<T>::recycablePool = std::deque<T>();
 
 	template<class T>
 	int ISystem<T>::maxPoolSize = 10000;
@@ -268,14 +269,13 @@ namespace decs {
 			}
 		}
 
+		// Cache optimisation
 		std::vector<T>& componentdeque = entities[entityId];
-
 		if (recycablePool.size() < maxPoolSize)
 		{
-			recycablePool.emplace_back(std::move(componentdeque.back()));
+			recycablePool.emplace_back(componentdeque.back());
 		}
 		componentdeque.pop_back();
-		componentdeque.shrink_to_fit();
 	}
 
 	/// <summary>
@@ -294,19 +294,19 @@ namespace decs {
 				return;
 			}
 		}
+
 		// Cache optimisation
 		std::vector<T>& componentdeque = entities[entityId];
-
-		while (componentdeque.size() > 0)
+		for (int i = componentdeque.size() - 1; i > -1; i--)
 		{
 			if (recycablePool.size() < maxPoolSize)
 			{
-				recycablePool.emplace_back(std::move(componentdeque.back()));
+				recycablePool.emplace_back(componentdeque.at(i));
+				continue;
 			}
-			componentdeque.erase(componentdeque.end() - 1);
+			break;
 		}
-		std::vector<T> empty = std::vector<T>();
-		componentdeque.swap(empty);
+		componentdeque.clear();
 	}
 
 	/// <summary>
@@ -331,6 +331,11 @@ namespace decs {
 		if (componentdeque.size() < position + 1)
 		{
 			return;
+		}
+
+		if (recycablePool.size() < maxPoolSize)
+		{
+			recycablePool.emplace_back(componentdeque.at(position));
 		}
 
 		componentdeque.erase(componentdeque.begin() + position);
@@ -381,6 +386,7 @@ namespace decs {
 		// Cache optimisation
 		std::vector<T>& componentdeque = entities[entityId];
 
+		// Check is valid position
 		if (componentdeque.size() < position + 1)
 		{
 			return;
@@ -406,13 +412,8 @@ namespace decs {
 				return;
 			}
 		}
-		// Cache optimisation
-		std::vector<T>& componentdeque = entities[entityId];
-
-		componentdeque.erase(componentdeque.begin(), componentdeque.end());
-
-		std::vector<T> empty = std::vector<T>();
-		componentdeque.swap(empty);
+		entities[entityId].clear();
+		
 	}
 
 	/// <summary>
@@ -429,7 +430,6 @@ namespace decs {
 
 		for (; it != entities.end(); )
 		{
-			//std::cout << it->first << std::endl;
 			if (it->second.size() == 0)
 			{
 				entities.erase(it++);
@@ -511,13 +511,9 @@ namespace decs {
 	///	Sets Maximum Size of the Pool. Defaults at 10000.
 	/// </summary>
 	template<class T>
-	inline void ISystem<T>::setPoolMaximumSize(int maximumSize, bool reserveMemory)
+	inline void ISystem<T>::setPoolMaximumSize(int maximumSize)
 	{
 		maxPoolSize = maximumSize;
-		if (reserveMemory)
-		{
-			recycablePool.reserve(maxPoolSize);
-		}
 	}
 
 	/// <summary>
@@ -537,7 +533,7 @@ namespace decs {
 	/// <param name=""></param>
 	/// <returns></returns>
 	template<class T>
-	inline std::vector<T>& ISystem<T>::getRecycalblePool()
+	inline std::deque<T>& ISystem<T>::getRecycalblePool()
 	{
 		return recycablePool;
 	}
@@ -635,7 +631,7 @@ namespace decs
 	/// <returns></returns>
 	/// <param name="poolComponents">True by default, set to false to call the destructor instead of pooling.</param>
 	/// <returns></returns>
-	static void destroyEntity(int entityID, bool poolComponents = true)
+	static void destroyEntity(int entityID,bool skipCustomIDCheck = false ,bool poolComponents = true)
 	{
 		int size = systems.size();
 
@@ -650,6 +646,11 @@ namespace decs
 		}
 
 		// check customAssignableID to free it for reuse
+		if (skipCustomIDCheck)
+		{
+			return;
+		}
+
 		size = customAssignedIds.size();
 		for (int i = 0; i < size; i++)
 		{
