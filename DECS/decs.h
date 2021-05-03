@@ -2,8 +2,8 @@
 *	Apache 2.0 License https://opensource.org/licenses/Apache-2.0
 * 	This is the single header include file for Dropped Entity Component System.
 *
-*	Created by Paul O'Callaghan as part of thesis looking at improving the Entity Component 
-*	system by removing the need for entities. 
+*	Created by Paul O'Callaghan as part of thesis looking at improving the Entity Component
+*	system by removing the need for entities.
 *
 *	SparseSet is a modified class based on Sam Griffiths class template of a sparse set of integers
 *	found here: https://gist.github.com/sjgriffiths/06732c6076b9db8a7cf4dfe3a7aed43a
@@ -287,20 +287,20 @@ namespace decs
 
 	template<class T>
 	inline typename std::vector<T>::iterator SparseSet<T>::begin()
-	{ 
-		return dense.begin(); 
+	{
+		return dense.begin();
 	}
 
 	template<class T>
-	inline typename std::vector<T>::iterator SparseSet<T>::back() 
-	{ 
-		return dense.begin() + (size_dense_vector - 1); 
+	inline typename std::vector<T>::iterator SparseSet<T>::back()
+	{
+		return dense.begin() + (size_dense_vector - 1);
 	}
 
 	template<class T>
-	inline typename std::vector<T>::iterator SparseSet<T>::end() 
-	{ 
-		return dense.begin() + size_dense_vector; 
+	inline typename std::vector<T>::iterator SparseSet<T>::end()
+	{
+		return dense.begin() + size_dense_vector;
 	}
 
 	template<class T>
@@ -931,6 +931,8 @@ namespace decs
 
 		T& getComponentWithIDAtIndex(int id, int index);
 
+		std::vector<T>& getDenseList();
+
 		int componentsSize();
 
 		void reserveIDCapacity(int u);
@@ -1061,6 +1063,12 @@ namespace decs
 	T& System<T>::getComponentWithID(int id)
 	{
 		return entityManager.get(id);
+	}
+
+	template<class T>
+	std::vector<T>& System<T>::getDenseList()
+	{
+		return entityManager.getDenseList();
 	}
 
 	template<class T>
