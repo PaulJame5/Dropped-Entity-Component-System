@@ -1,110 +1,739 @@
 /*
 *	Apache 2.0 License https://opensource.org/licenses/Apache-2.0
 * 	This is the single header include file for Dropped Entity Component System.
-*	Created by Paul O'Callaghan as part of thesis looking at improving the Entity Component system by relegating
-*	the Entity to an ID assigner type role instead of as a cotainer.
+*
+*	Created by Paul O'Callaghan as part of thesis looking at improving the Entity Component 
+*	system by removing the need for entities. 
+*
+*	SparseSet is a modified class based on Sam Griffiths class template of a sparse set of integers
+*	found here: https://gist.github.com/sjgriffiths/06732c6076b9db8a7cf4dfe3a7aed43a
 */
+
 #pragma once
-#include <map>
+#include <iostream>
+#include <algorithm>
 #include <deque>
 #include <vector>
-#include <iostream>
-#include <stdlib.h>     /* malloc, calloc, realloc, free */
-
+#include <type_traits>
 
 namespace decs
 {
-	/// <summary>
-	/// This is an inherited class to be used by all Components.
-	/// </summary>
-	class Component
-	{
-	public:
-		Component();
-		virtual ~Component() {};
-		virtual void initialise() = 0;
+	class Component;
 
-		int belongsToID();
-		void setBelongsToID(int id);
-		void setActive(bool active);
-		bool isActive();
+	template <class T>
+	class SparseSet
+	{
+		static_assert(std::is_convertible<T*, Component*>::value, "class<T> Must inherit from Component");
+
+	private:
+		static int size_dense_vector;
+		static int capacity_sparse_vector;
 
 	protected:
-		int belongsTo = -1;
-		bool activeSelf = true;
+		static std::vector<T> dense;
+		static std::vector<std::vector<int>> sparse;
+
+		/// <summary>
+		/// Method to perform a default insert of a newly constructed component.
+		/// </summary>
+		/// <param name="id">ID to tag component with.</param>
+		void defaultInsert(int id);
+
+		/// <summary>
+		/// Method to perform a pooled insert.
+		/// </summary>
+		/// <param name="id">ID to tag component with.</param>
+		void pooledInsert(int id);
+
+		/// <summary>
+		/// Remove algorithm that handles organising dense list for pooling and destrtuction.
+		/// Will reorder components if a component is moved closer to the beginning of dense list.
+		/// Best case O(1), worst case O(N) based on complexity of copy constructor.
+		/// </summary>
+		/// <param name="id">ID of component to perform removal/deletion on.</param>
+		void rem(int id);
+
+	public:
+		SparseSet();
+		~SparseSet();
+
+
+		/// <summary>
+		/// Returns begin iterator of dense list.
+		/// </summary>
+		/// <returns>Returns begin iterator of dense list.</returns>
+		typename std::vector<T>::iterator begin();
+
+		/// <summary>
+		/// Retruns last element iterator of dense list.
+		/// </summary>
+		/// <returns>Retruns last element iterator of dense list.</returns>
+		typename std::vector<T>::iterator back();
+
+		/// <summary>
+		/// Iterator end of dense list.
+		/// </summary>
+		/// <returns>End iterator of dense list.</returns>
+		typename std::vector<T>::iterator end();
+
+		/// <summary>
+		/// Returns size of used components in dense list.
+		/// </summary>
+		/// <returns>Returns size of used components in dense list.</returns>
+		int size();
+
+		int numberOfIDs();
+		/// <summary>
+		/// Returns size of dense list both active and inactive.
+		/// </summary>
+		/// <returns>Returns size of dense list both active and inactive.</returns>
+		int denseListSize();
+
+		/// <summary>
+		/// Cheks if dense list is currently empty.
+		/// </summary>
+		/// <returns>True if dense list contains no active objects, otherwise returns false if contains objects.</returns>
+		bool empty();
+
+		/// <summary>
+		/// Clears dense list, sparse list and resizes everything back to 0.
+		/// </summary>
+		void clear();
+
+		/// <summary>
+		/// Calls reser on sparse list. Effectively tells the array the highest id that will be used/is in use.
+		/// </summary>
+		/// <param name="u"></param>
+		void reserveIDCapacity(int u);
+
+		/// <summary>
+		/// Calls reserve on dense list.
+		/// </summary>
+		/// <param name="u">Number of components size to reserve.</param>
+		void reserveComponentCapacity(int u);
+
+		/// <summary>
+		/// Checks if component with id exists. Returs false if is doesn't otherwise it returns true.
+		/// </summary>
+		/// <param name="id">ID of component to check if it exists.</param>
+		/// <returns>True if component has ID, false if not found.</returns>
+		bool has(const int id);
+
+		/// <summary>
+		/// Inserts component with ID to dense list. If there is a pooled object this will be initialised with the
+		/// values instead of constructing a new one.
+		/// </summary>
+		/// <param name="id">ID to tag component with.</param>
+		void insert(const int id);
+
+		/// <summary>
+		/// Removes all objects not used in the dense list effectively making dense.size() = dense_vector_size.
+		/// </summary>
+		void removePooledObjects();
+
+		/// <summary>
+		/// For adding another component to self. Only use if you are sure there's another component already attached
+		/// as no checks are performed when using this method.
+		/// </summary>
+		/// <param name="id">ID to tag component with.</param>
+		void insertAnotherToSelf(int id);
+
+		/// <summary>
+		/// Returns pointer to first component found with id. Returns nullptr if not found. If dense list resizes after
+		/// lookup pointer will become invalidated.
+		/// </summary>
+		/// <param name="id">ID of component to be found.</param>
+		/// <returns>Pointer to component.</returns>
+		T* ptrGet(const int id);
+
+		/// <summary>
+		/// Returns pointer to component in dense list at given index relative to id.
+		/// Returns nullptr if not found. If dense list is resized after lookup pointer will be invalidated.
+		/// </summary>
+		/// <param name="id">ID of component to return.</param>
+		/// <param name="index">Index of component relative to id.</param>
+		/// <returns>Pointer to component.</returns>
+		T* ptrGetAtIndex(const int id, const int index);
+
+		/// <summary>
+		/// Retruns reference to first found component with given id in the dense list.
+		/// Results in undefined behaviour if component doesn't exist. Use with caution.
+		/// </summary>
+		/// <param name="id">ID of component to be returned.</param>
+		/// <returns>Reference to component in dense list</returns>
+		T& get(const int id);
+
+		/// <summary>
+		/// Returns reference to component with id at index position. Results in undefined behaviour if component doesn't
+		/// exists. Use with caution.
+		/// </summary>
+		/// <param name="id">ID of component to be returned.</param>
+		/// <param name="index">Index of component relative to id to be returned.</param>
+		/// <returns>Reference to Component in dense list.</returns>
+		T& getAtIndex(const int id, const int index);
+
+		/// <summary>
+		/// Returns reference to the dense list of components.
+		/// </summary>
+		/// <returns>Dense list of components</returns>
+		std::vector<T>& getDenseList();
+
+		/// <summary>
+		/// Emplaces component to end of dense list with given id.
+		/// </summary>
+		/// <param name="id">ID of component to be emplaced</param>
+		/// <param name="copy">Component to have it's values emplaced.</param>
+		void emplace(const int id, T&& copy);
+
+		/// <summary>
+		/// Inserts a copy of components values to the end of dense list with given id.
+		/// </summary>
+		/// <param name="id">ID of component that notifies sparse.</param>
+		/// <param name="copy">Component to have it's values copied.</param>
+		void insertCopy(const int id, T& copy);
+
+		/// <summary>
+		/// Destroys first component found with given id that is closest to the begininng of dense list.
+		/// </summary>
+		/// <param name="id">ID tag of component to be destroyed.</param>
+		/// <returns>True if component is destroyed, false if nothing is destroyed.</returns>
+		bool erase(const int id);
+
+		/// <summary>
+		/// Destroys all component with a given id.
+		/// </summary>
+		/// <param name="id">ID of components to be destroyed.</param>
+		/// <returns>True if components are destroyed, false if nothing is destroyed.</returns>
+		bool eraseAll(const int id);
+
+		/// <summary>
+		/// Removes first component found closest to the beginning of the dense list. Removed component
+		/// is placed into a pool.
+		/// </summary>
+		/// <param name="id">ID tag of component to be removed.</param>
+		/// <returns>True if component removed, false if nothing is removed.</returns>
+		bool removeWithID(const int id);
+
+		/// <summary>
+		/// Removes all components with given id. Removed components are moved to a pool.
+		/// </summary>
+		/// <param name="id">ID tag of components you want removed.</param>
+		/// <returns>True if all components removed, false if none are removed.</returns>
+		bool removeAllWithID(const int id);
+
+		/// <summary>
+		/// Returns the number of components that share the given id.
+		/// </summary>
+		/// <param name="id">ID of components you want to check.</param>
+		/// <returns>Number of components with given id.</returns>
+		int numberOfComponentsWithID(const int id);
+
+		/// <summary>
+		/// Returns the number of components that are able to run update in dense list.
+		/// </summary>
+		/// <returns>Number of components that can update in dense list.</returns>
+		int numberOfActiveComponents();
+
+		/// <summary>
+		/// Runs update on every active component in dense list.
+		/// </summary>
+		void runUpdate();
+
+		/// <summary>
+		/// replaces component values with id that is closest to the start of the dense list.
+		/// </summary>
+		/// <param name="id">ID tag of the component</param>
+		/// <param name="copy">Component values you want copied</param>
+		void replace(const int id, T& copy);
+
+		/// <summary>
+		/// Replace a component with anothers value. If there is no component this does nothing.
+		/// </summary>
+		/// <param name="id">ID tag of component</param>
+		/// <param name="componentPosition">whether you want the 1st, 2nd... component</param>
+		/// <param name="copy">Component values you want copied</param>
+		void replace(const int id, int componentPosition, T& copy);
+
+		/// <summary>
+		/// For debugging purposes, print out all elements containing components
+		/// </summary>
+		void print();
 	};
 
-	inline Component::Component()
+	template <class T>
+	std::vector<T> SparseSet<T>::dense = std::vector<T>();	//Dense set of elements
+
+	template <class T>
+	std::vector<std::vector<int>> SparseSet<T>::sparse(0, std::vector<int>(0));	//Map of elements to dense set indices
+
+	template <class T>
+	int SparseSet<T>::size_dense_vector = 0;	// Current size (number of elements)
+
+	template <class T>
+	int SparseSet<T>::capacity_sparse_vector = 0;	//Current capacity (maximum value + 1)
+
+	template<class T>
+	inline SparseSet<T>::SparseSet()
+	{
+		dense.clear();
+		sparse.clear();
+	}
+
+	template<class T>
+	inline SparseSet<T>::~SparseSet()
 	{
 
 	}
-	/// <summary>
-	/// Get the entity that the current component belongs to
-	/// </summary>
-	/// <returns></returns>
-	inline int Component::belongsToID()
-	{
-		return belongsTo;
-	}
-	/// <summary>
-	/// Set id that current component belongs to. Automatically assigned when called from ISystem::addComponent()
-	/// </summary>
-	/// <param name="id"></param>
-	inline void Component::setBelongsToID(int id)
-	{
-		belongsTo = id;
-	}
-	/// <summary>
-	/// Set whether component is active or not.
-	/// </summary>
-	inline void Component::setActive(bool active)
-	{
-		activeSelf = active;
-	}
-	/// <summary>
-	/// Returns true if Component is active.
-	/// </summary>
-	/// <returns></returns>
-	inline bool Component::isActive()
-	{
-		return activeSelf;
-	}
-} // End Component
 
-// ISystemBase
+	template<class T>
+	inline typename std::vector<T>::iterator SparseSet<T>::begin()
+	{ 
+		return dense.begin(); 
+	}
+
+	template<class T>
+	inline typename std::vector<T>::iterator SparseSet<T>::back() 
+	{ 
+		return dense.begin() + (size_dense_vector - 1); 
+	}
+
+	template<class T>
+	inline typename std::vector<T>::iterator SparseSet<T>::end() 
+	{ 
+		return dense.begin() + size_dense_vector; 
+	}
+
+	template<class T>
+	inline int SparseSet<T>::size()
+	{
+		return size_dense_vector;
+	}
+
+	template<class T>
+	inline int SparseSet<T>::numberOfIDs()
+	{
+		return capacity_sparse_vector;
+	}
+
+	template<class T>
+	inline int SparseSet<T>::denseListSize()
+	{
+		return dense.size();
+	}
+
+	template<class T>
+	inline bool SparseSet<T>::empty()
+	{
+		return size_dense_vector == 0;
+	}
+
+	template<class T>
+	inline void SparseSet<T>::clear()
+	{
+		dense.clear();
+		dense.resize(0);
+		size_dense_vector = 0;
+		sparse.clear();
+		sparse.resize(0);
+		capacity_sparse_vector = 0;
+	}
+
+	template<class T>
+	inline void SparseSet<T>::reserveIDCapacity(int u)
+	{
+		if (u > capacity_sparse_vector)
+		{
+			sparse.resize(u);
+			capacity_sparse_vector = u;
+		}
+	}
+
+	template<class T>
+	inline void SparseSet<T>::reserveComponentCapacity(int u)
+	{
+		if (u > dense.size())
+		{
+			dense.reserve(u);
+		}
+	}
+
+	template<class T>
+	inline bool SparseSet<T>::has(const int id)
+	{
+		if (id >= capacity_sparse_vector)
+		{
+			return false;
+		}
+
+		if (size_dense_vector == 0)
+		{
+			return false;
+		}
+		std::vector<int>& sparseCache = sparse[id];
+
+		if (sparseCache.empty())
+		{
+			return false;
+		}
+
+		return true;
+	} // end has(id)
+
+	template<class T>
+	inline void SparseSet<T>::insert(const int id)
+	{
+		if (id >= capacity_sparse_vector)
+		{
+			reserveIDCapacity(id + 1);
+		}
+
+		if (dense.size() <= size_dense_vector)
+		{
+			defaultInsert(id);
+			return;
+		}
+		pooledInsert(id);
+	}
+
+	template<class T>
+	inline void SparseSet<T>::defaultInsert(int id)
+	{
+		dense.emplace_back();
+		T& created = dense[size_dense_vector];
+		created.setBelongsToID(id);
+		created.setActive(true);
+		created.initialise();
+
+		sparse.at(id).push_back(size_dense_vector);
+		++size_dense_vector;
+	}
+
+	template<class T>
+	inline void SparseSet<T>::pooledInsert(int id)
+	{
+		T& recycaled = dense[size_dense_vector];
+		recycaled.setBelongsToID(id);
+		recycaled.setActive(true);
+		recycaled.initialise();
+
+		sparse.at(id).push_back(size_dense_vector);
+		++size_dense_vector;
+	}
+
+	template<class T>
+	inline void SparseSet<T>::removePooledObjects()
+	{
+		while (dense.size() > size_dense_vector)
+		{
+			dense.pop_back();
+		}
+	}
+
+	template<class T>
+	inline void SparseSet<T>::insertAnotherToSelf(int id)
+	{
+		defaultInsert(id);
+	}
+
+	template<class T>
+	inline T* SparseSet<T>::ptrGet(const int id)
+	{
+		if (!has(id))
+		{
+			return nullptr;
+		}
+		return &dense[sparse.at(id).at(0)];
+	}
+
+	template<class T>
+	inline T* SparseSet<T>::ptrGetAtIndex(const int id, const int index)
+	{
+		if (!has(id))
+		{
+			return nullptr;
+		}
+		if (sparse.at(id).size() <= index)
+		{
+			return nullptr;
+		}
+		return &dense[sparse.at(id).at(index)];
+	}
+
+	template<class T>
+	inline T& SparseSet<T>::get(const int id)
+	{
+		return dense[sparse.at(id).at(0)];
+	}
+
+	template<class T>
+	inline T& SparseSet<T>::getAtIndex(const int id, const int index)
+	{
+		return dense[sparse.at(id).at(index)];
+	}
+
+	template<class T>
+	inline std::vector<T>& SparseSet<T>::getDenseList()
+	{
+		return dense;
+	}
+
+	template<class T>
+	inline void SparseSet<T>::emplace(const int id, T&& copy)
+	{
+		if (id >= capacity_sparse_vector)
+		{
+			reserveIDCapacity(id + 1);
+		}
+
+		dense.emplace_back(copy);
+		dense[size_dense_vector].setBelongsToID(id);
+		sparse.at(id).push_back(size_dense_vector);
+		++size_dense_vector;
+	}
+
+	template<class T>
+	inline void SparseSet<T>::insertCopy(const int id, T& copy)
+	{
+		if (id >= capacity_sparse_vector)
+		{
+			reserveIDCapacity(id + 1);
+		}
+
+		dense.push_back(copy);
+		dense[size_dense_vector].setBelongsToID(id);
+		sparse.at(id).push_back(size_dense_vector);
+		++size_dense_vector;
+	}
+
+	template<class T>
+	inline bool SparseSet<T>::erase(const int id)
+	{
+		if (!has(id))
+		{
+			return false;
+		}
+
+		rem(id);
+		dense.pop_back();
+		return true;
+	}
+
+	template<class T>
+	inline bool SparseSet<T>::eraseAll(const int id)
+	{
+		if (!has(id))
+		{
+			return false;
+		}
+		while (sparse.at(id).size() > 0)
+		{
+			rem(id);
+			dense.pop_back();
+		}
+		return true;
+	}
+
+	template<class T>
+	inline bool SparseSet<T>::removeWithID(const int id)
+	{
+		if (!has(id))
+		{
+			return false;
+		}
+		rem(id);
+		return true;
+	}
+
+	template<class T>
+	inline bool SparseSet<T>::removeAllWithID(const int id)
+	{
+		if (!has(id))
+		{
+			return false;
+		}
+		while (!sparse.at(id).empty())
+		{
+			rem(id);
+		}
+		return true;
+	}
+
+	template<class T>
+	inline int SparseSet<T>::numberOfComponentsWithID(const int id)
+	{
+		if (!has(id))
+		{
+			return 0;
+		}
+		return sparse.at(id).size();
+	}
+
+	template<class T>
+	inline int SparseSet<T>::numberOfActiveComponents()
+	{
+		return size_dense_vector;
+	}
+
+	template<class T>
+	inline void SparseSet<T>::runUpdate()
+	{
+		for (int i = 0; i < size_dense_vector; i++)
+		{
+			if (!dense[i].isActive())
+			{
+				continue;
+			}
+			dense.at(i).update();
+		}
+	}
+
+	template<class T>
+	inline void SparseSet<T>::replace(const int id, T& copy)
+	{
+		if (!has(id))
+		{
+			return;
+		}
+		copy.setBelongsToID(id);
+		dense.at(sparse.at(id).at(0)) = copy;
+	}
+
+	template<class T>
+	inline void SparseSet<T>::replace(const int id, int componentPosition, T& copy)
+	{
+		if (!has(id))
+		{
+			return;
+		}
+		if (componentPosition >= sparse.at(id).size())
+		{
+			return;
+		}
+		copy.setBelongsToID(id);
+		dense.at(sparse.at(id).at(componentPosition)) = copy;
+	}
+
+	template<class T>
+	inline void SparseSet<T>::print()
+	{
+		if (size_dense_vector == 0)
+		{
+			printf("no components in dense array");
+			printf("\n");
+			return;
+		}
+		for (int i = 0; i < size_dense_vector; i++)
+		{
+			printf("%d, ", dense[i].belongsToID());
+		}
+		printf("\n");
+	}
+
+	template<class T>
+	inline void SparseSet<T>::rem(int id)
+	{
+		int pos = sparse.at(id).back();
+
+		if (pos == size_dense_vector - 1)
+		{
+			sparse.at(id).pop_back();
+			--size_dense_vector;
+			return;
+		}
+
+		dense[pos].setActive(false);
+
+		int lastElementBelongID = dense[size_dense_vector - 1].belongsToID();
+
+		sparse[lastElementBelongID].back() = pos;
+		dense[pos] = dense[size_dense_vector - 1];
+
+		if (sparse[lastElementBelongID].size() > 1)
+		{
+			std::sort(sparse[lastElementBelongID].begin(), sparse[lastElementBelongID].end());
+		}
+
+		sparse.at(id).pop_back();
+		--size_dense_vector;
+	} // End rem(id);
+
+} // End sparse
+
+
+// System base
+
+// SystemBase
 namespace decs
 {
-	// Base class of ISystem. Used by Entity for when storing a deque of systems to check when deleting entities.
-	class ISystemBase
+	// Base class of System. Used by Entity for when storing 
+	// a deque of systems to check when deleting entities.
+	// Do not construct or use this by itself as it will do nothing.
+	class SystemBase
 	{
 	public:
-		ISystemBase();
-		~ISystemBase();
+		SystemBase();
 
-		virtual void removeComponents(int entityId, bool immediate = false) = 0;
+		~SystemBase();
 
-		virtual void destroyComponents(int entityId, bool immediate = false) = 0;
+		virtual bool removeAllComponentsWithID(int entityId) = 0;
+
+		virtual bool destroyAllComponentsWithID(int entityId) = 0;
+
+		virtual bool hasComponentWithID(int entityID) = 0;
 
 		virtual int getSystemID() = 0;
+
+		virtual void update() {};
+
+		virtual int highestIDUsed() = 0;
+
+		virtual int numberOfActiveComponents() = 0;
+
+		virtual void clear() = 0;
 	};
 
-	inline ISystemBase::ISystemBase() {}
+	inline SystemBase::SystemBase() {}
 
-	inline ISystemBase::~ISystemBase() {}
+	inline SystemBase::~SystemBase() {}
 
 	// Storage of existing systems
 	static int assignableSystemID = 0;
-	static std::vector<std::reference_wrapper<ISystemBase>> systems = std::vector<std::reference_wrapper<ISystemBase>>();
+	static std::vector<std::reference_wrapper<SystemBase>> systems = std::vector<std::reference_wrapper<SystemBase>>();
+	static std::deque<int> reusableIds = std::deque<int>();
+	static std::deque<int> destroyListPool = std::deque<int>();
+	static std::deque<int> destroyList = std::deque<int>();
+	static int nextAvailableID = 0;
+	static float deltaTime = 0;
+
+	// forward declare
+	static void destroy();
 
 	/// <summary>
-	/// Used by ISystem automatically upon construction of an ISystem.
-	/// Returns true if it is added successfully, false if it does not get added.
+	/// Returns ID to be used. Will use one from reusable 
+	/// ids if one is available.
 	/// </summary>
-	/// <param name="system"> "The ISystem that you wish to have added to the deque."</param>
-	/// <returns>description</returns>
-	static bool addSystem(ISystemBase& system)
+	/// <returns>Id for use.</returns>
+	static int createNewID()
 	{
-		int size = systems.size();
+		if (reusableIds.empty())
+		{
+			return nextAvailableID++;
+		}
+		int returnedID = reusableIds.back();
+		reusableIds.pop_back();
+		return returnedID;
+	}
+	/// <summary>
+	/// Used by System automatically upon construction of an System.
+	/// Returns true if it is added successfully, 
+	/// false if it does not get added.
+	/// </summary>
+	/// <param name="system"> "The System that you wish 
+	/// to have added to the deque."</param>
+	/// <returns>description</returns>
+	static bool addSystem(SystemBase& system)
+	{
+		size_t size = systems.size();
 
 		for (int i = 0; i < size; i++)
 		{
@@ -119,77 +748,229 @@ namespace decs
 
 	/// <summary>
 	/// Returns ID of a new entity then increments next assignable id. 
-	/// This is called by ISystems on construction if they have no id assigned
+	/// This is called by Systems on construction if 
+	/// they have no id assigned to them yet.
 	/// </summary>
 	/// <returns>id of entity</returns>
 	static int createNewSystemID()
 	{
 		return assignableSystemID++;
 	}
-} // End ISystemBase
 
-// ISystem
-namespace decs {
 	/// <summary>
-	/// class to be iherited by user defined Systems. ISystem has a deque of generic functions to be used with DECS.
+	/// Calls update on all systems that have 
+	/// set allowUpdate to true. 
 	/// </summary>
-	template<class T>
-	class ISystem : ISystemBase
+	static void update()
 	{
+		size_t size = systems.size();
+		for (int i = 0; i < size; i++)
+		{
+			systems.at(i).get().update();
+		}
+		// Clean up components marked for destruction.
+		destroy();
+	}
+
+	/// <summary>
+	/// Marks entity to be destroyed. 
+	/// If using built in update these entites are removed 
+	/// or destroyed at the end of the update cycle.
+	/// </summary>
+	/// <param name="entityID">ID of components to be removed.</param>
+	/// <param name="poolComponents">Whether to store 
+	/// components in a pool or not. True by default.</param>
+	static void destroyEntity(int entityID, bool poolComponents = true)
+	{
+		size_t size = systems.size();
+
+		for (int i = 0; i < size; i++)
+		{
+			if (systems.at(i).get().hasComponentWithID(entityID))
+			{
+				if (poolComponents)
+				{
+					destroyListPool.push_back(entityID);
+					break;
+				}
+				destroyList.push_back(entityID);
+				break;
+			}
+		}
+	}
+
+	/// <summary>
+	/// Marks all ids and components for destruction. 
+	/// If using built in update components will be destroyed at 
+	/// the end of the update cycle.
+	/// </summary>
+	/// <param name="poolComponents">Whether to store 
+	/// components for reuse or not. Set to false by default.</param>
+	static void destroyAllEntities(bool poolComponents = false)
+	{
+		size_t systemSize = systems.size();
+		int highestID = 0;
+
+		for (int i = 0; i < systemSize; i++)
+		{
+			int highestSystemID = systems.at(i).get().highestIDUsed();
+			if (highestSystemID > highestID)
+			{
+				highestID = highestSystemID;
+			}
+		}
+
+		for (int j = 0; j <= highestID; j++)
+		{
+			destroyEntity(j, poolComponents);
+		}
+	}
+
+	/// <summary>
+	/// Finds all ids used that have no components and 
+	/// places them into the id pool to be reused.
+	/// </summary>
+	static void destroyOrphanedEntities()
+	{
+		size_t systemSize = systems.size();
+		int highestID = 0;
+
+		for (int i = 0; i < systemSize; i++)
+		{
+			int highestSystemID = systems.at(i).get().highestIDUsed();
+
+			if (highestSystemID > highestID)
+			{
+				highestID = highestSystemID;
+			}
+		}
+
+		std::deque<int> destroyList;
+		bool destroyable = false;
+
+		for (int i = 0; i <= highestID; i++)
+		{
+			for (int systemID = 0; systemID < systemSize; systemID++)
+			{
+				if (!systems.at(systemID).get().hasComponentWithID(i))
+				{
+					destroyList.push_back(i);
+					break;
+				}
+			}
+		}
+
+		while (destroyList.empty() == false)
+		{
+			reusableIds.push_back(destroyList.back());
+			destroyList.pop_back();
+		}
+
+	} // End destroyOrphanedentitiies();
+
+	/// <summary>
+	/// Destroys marked components. This is called automatically 
+	/// with the built in update.
+	/// 
+	/// When using custom updates this needs to be 
+	/// called by the user.
+	/// </summary>
+	static void destroy()
+	{
+		while (destroyList.empty() == false)
+		{
+			for (int i = 0; i < systems.size(); i++)
+			{
+				systems.at(i).get().destroyAllComponentsWithID(destroyList.back());
+			}
+			reusableIds.push_back(destroyList.back());
+			destroyList.pop_back();
+		}
+		while (destroyListPool.empty() == false)
+		{
+			for (int i = 0; i < systems.size(); i++)
+			{
+				systems.at(i).get().removeAllComponentsWithID(destroyListPool.back());
+			}
+			reusableIds.push_back(destroyListPool.back());
+			destroyListPool.pop_back();
+		}
+	} // end Destroy();
+} // End SystemBase
+
+namespace decs
+{
+	template<class T>
+	class System : SystemBase
+	{
+		static_assert(std::is_convertible<T*, Component*>::value, "class<T> Must inherit from Component");
 	public:
-		ISystem();
-		~ISystem();
+		System();
 
-		// We do not want our system to be cloneable
-		ISystem(ISystem& other) = delete;
+		void addComponentWithID(int id);
 
-		// Adds component with default values
-		void addComponent(int entityId);
+		void addComponentValuesWithID(int id, T& copy);
 
-		// Adds component with values to entity id
-		void addComponent(int entityId, T& t);
+		void removeComponentWithID(int id);
 
-		//// Removes component from entity and places it in a recyclable pool
-		void removeComponent(int entityId, bool immediate = false);
-		void removeComponents(int entityId, bool immediate = false);
-		void removeComponentAt(int entityId, int position, bool immediate = false);
+		bool removeAllComponentsWithID(int id) override;
 
-		// Destroys / Deletes component from memeory
-		void destroyComponent(int entityId, bool immediate = false);
-		void destroyComponents(int entityId, bool immediate = false);
-		void destroyComponentAt(int entityId, int position, bool immediate = false);
+		void destroyComponentWithID(int id);
 
-		void cleanUpEntities();
+		bool destroyAllComponentsWithID(int id) override;
 
-		bool hasComponent(int entityId);
+		void clear() override { entityManager.clear(); };
 
-		// Returns first element null/blank if empty
-		T& getComponent(int entityId);
+		bool hasComponentWithID(int id) override;
 
-		// Returns deque of components type T attached to entity
-		std::vector<T>& getComponents(int entityId);
+		T* getPtrComponentWithID(int id);
 
+		T* getPtrComponentWithIDAtIndex(int id, int index);
 
-		std::map<int, std::vector<T>>& getEntities();
+		T& getComponentWithID(int id);
 
-		void setPoolMaximumSize(int maximumSize);
-		std::deque<T>& getRecycalblePool();
-		int getPoolSize();
-		void resetPool();
+		T& getComponentWithIDAtIndex(int id, int index);
 
-		int getSystemID();
+		int componentsSize();
+
+		void reserveIDCapacity(int u);
+
+		void reserveComponentCapacity(int u);
+
+		void clearAll();
+
+		int getNumberOfComponentsWithID(int id);
+
+		int numberOfActiveComponents();
+
+		int getSystemID() override;
+
+		void update() override;
+
+		void setCanUpdate(bool allow);
 
 	protected:
-		static std::map<int, std::vector<T>> entities;
-		static std::deque<T> recycablePool;
+		static SparseSet<T> entityManager;
 
 	private:
 		static int systemID;
-		static int maxPoolSize;
+		static bool allowUpdate;
+
+		int highestIDUsed() override;
+
 	};
 
 	template<class T>
-	inline ISystem<T>::ISystem()
+	SparseSet<T> System<T>::entityManager = SparseSet<T>();
+
+	template<class T>
+	int System<T>::systemID = -1;
+
+	template<class T>
+	bool System<T>::allowUpdate = true;
+
+	template<class T>
+	System<T>::System()
 	{
 		if (systemID != -1)
 		{
@@ -197,468 +978,247 @@ namespace decs {
 		}
 		systemID = decs::createNewSystemID();
 		decs::addSystem(*this);
+
 	}
 
 	template<class T>
-	inline ISystem<T>::~ISystem() {}
+	void System<T>::update()
+	{
+		if (!allowUpdate)
+		{
+			return;
+		}
+		entityManager.runUpdate();
+	}
 
 	template<class T>
-	std::map<int, std::vector<T>> ISystem<T>::entities = std::map<int, std::vector<T>>();
+	int System<T>::highestIDUsed()
+	{
+		return entityManager.numberOfIDs();
+	}
 
 	template<class T>
-	std::deque<T> ISystem<T>::recycablePool = std::deque<T>();
+	void System<T>::setCanUpdate(bool allow)
+	{
+		allowUpdate = allow;;
+	}
 
 	template<class T>
-	int ISystem<T>::maxPoolSize = 10000;
+	void System<T>::addComponentWithID(int id)
+	{
+		entityManager.insert(id);
+	}
 
 	template<class T>
-	int ISystem<T>::systemID = -1;
+	inline void System<T>::addComponentValuesWithID(int id, T& copy)
+	{
+		entityManager.insertCopy(id, copy);
+	}
 
 	template<class T>
-	inline int ISystem<T>::getSystemID()
+	void System<T>::removeComponentWithID(int id)
+	{
+		entityManager.removeWithID(id);
+	}
+
+	template<class T>
+	bool System<T>::removeAllComponentsWithID(int id)
+	{
+		return entityManager.removeAllWithID(id);
+	}
+
+	template<class T>
+	void System<T>::destroyComponentWithID(int id)
+	{
+		entityManager.erase(id);
+	}
+
+	template<class T>
+	bool System<T>::destroyAllComponentsWithID(int id)
+	{
+		return entityManager.eraseAll(id);
+	}
+
+	template<class T>
+	bool System<T>::hasComponentWithID(int id)
+	{
+		return entityManager.has(id);
+	}
+
+	template<class T>
+	T* System<T>::getPtrComponentWithID(int id)
+	{
+		return entityManager.ptrGet(id);
+	}
+
+	template<class T>
+	T* System<T>::getPtrComponentWithIDAtIndex(int id, int index)
+	{
+		return entityManager.ptrGetAtIndex(id, index);
+	}
+
+	template<class T>
+	T& System<T>::getComponentWithID(int id)
+	{
+		return entityManager.get(id);
+	}
+
+	template<class T>
+	T& System<T>::getComponentWithIDAtIndex(int id, int index)
+	{
+		return entityManager.getAtIndex(id, index);
+	}
+
+	template<class T>
+	int System<T>::componentsSize()
+	{
+		return entityManager.size();
+	}
+
+	template<class T>
+	inline void System<T>::reserveIDCapacity(int u)
+	{
+		entityManager.reserveIDCapacity(u);
+	}
+
+	template<class T>
+	inline void System<T>::reserveComponentCapacity(int u)
+	{
+		entityManager.reserveComponentCapacity(u);
+	}
+
+	template<class T>
+	int System<T>::numberOfActiveComponents()
+	{
+		return entityManager.numberOfActiveComponents();
+	}
+
+	template<class T>
+	void System<T>::clearAll()
+	{
+		entityManager.clear();
+	}
+
+	template<class T>
+	int System<T>::getNumberOfComponentsWithID(int id)
+	{
+		return entityManager.numberOfComponentsWithID(id);
+	}
+
+	template<class T>
+	int System<T>::getSystemID()
 	{
 		return systemID;
 	}
+} // End System<T>
 
-	/// <summary>
-	/// Adds Component of type T with it's default Constructor to given Entity with ID.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <param name="entityId"></param>
-	template<class T>
-	inline void ISystem<T>::addComponent(int entityId)
-	{
-		std::vector<T>& componentdeque = entities[entityId];
-		if (recycablePool.empty() == false)
-		{
-			recycablePool.back().setBelongsToID(entityId);
-			componentdeque.emplace_back(std::move(recycablePool.back()));
-			recycablePool.pop_back();
-			componentdeque.back().initialise();
-			return;
-		}
-
-		componentdeque.emplace_back();
-		componentdeque.back().setBelongsToID(entityId);
-	}
-
-	/// <summary>
-	/// Adds component with values to an Entity with given ID.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <param name="entityId"></param>
-	template<class T>
-	inline void ISystem<T>::addComponent(int entityId, T& newComponent)
-	{
-		newComponent.setBelongsToID(entityId);
-		entities[entityId].emplace_back(newComponent);
-	}
-
-	/// <summary>
-	///	Removes last component added to an entity and stores in a pool.
-	/// Set Immediate to true if you don't want to check if the entity has a comoonent.
-	/// </summary>
-	template<class T>
-	inline void ISystem<T>::removeComponent(int entityId, bool immediate)
-	{
-		if (!immediate)
-		{
-			if (!hasComponent(entityId))
-			{
-				return;
-			}
-		}
-
-		// Cache optimisation
-		std::vector<T>& componentdeque = entities[entityId];
-		if (recycablePool.size() < maxPoolSize)
-		{
-			recycablePool.emplace_back(componentdeque.back());
-		}
-		componentdeque.pop_back();
-	}
-
-	/// <summary>
-	/// Removes all components attached to an entity and moves themm to a pool.
-	/// Set Immediate to true if you don't want to check if the entity has a comoonent.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <param name="entityId"></param>
-	template<class T>
-	inline void ISystem<T>::removeComponents(int entityId, bool immediate)
-	{
-		if (!immediate)
-		{
-			if (!hasComponent(entityId))
-			{
-				return;
-			}
-		}
-
-		// Cache optimisation
-		std::vector<T>& componentdeque = entities[entityId];
-		for (int i = componentdeque.size() - 1; i > -1; i--)
-		{
-			if (recycablePool.size() < maxPoolSize)
-			{
-				recycablePool.emplace_back(componentdeque.at(i));
-				continue;
-			}
-			break;
-		}
-		componentdeque.clear();
-	}
-
-	/// <summary>
-	/// Deletes element at position.
-	/// Set Immediate to true if you don't want to check if the entity has a comoonent.
-	/// </summary>
-	/// <typeparam name="T">Must have a base class of Component</typeparam>
-	/// <param name="entityId">Id of given entity</param>
-	template<class T>
-	inline void ISystem<T>::removeComponentAt(int entityId, int position, bool immediate)
-	{
-		if (!immediate)
-		{
-			if (!hasComponent(entityId))
-			{
-				return;
-			}
-		}
-		// Cache optimisation
-		std::vector<T>& componentdeque = entities[entityId];
-
-		if (componentdeque.size() < position + 1)
-		{
-			return;
-		}
-
-		if (recycablePool.size() < maxPoolSize)
-		{
-			recycablePool.emplace_back(componentdeque.at(position));
-		}
-
-		componentdeque.erase(componentdeque.begin() + position);
-	}
-
-	/// <summary>
-	///	Destroys last component added to an entity without adding it to the recycablePool deque.
-	/// Set Immediate to true if you don't want to check if the entity has a comoonent.
-	/// </summary>
-	template<class T>
-	inline void ISystem<T>::destroyComponent(int entityId, bool immediate)
-	{
-		if (!immediate)
-		{
-			if (!hasComponent(entityId))
-			{
-				return;
-			}
-		}
-		// Cache optimisation
-		std::vector<T>& componentdeque = entities[entityId];
-
-		componentdeque.erase(componentdeque.end() - 1);
-
-		if (componentdeque.size() == 0)
-		{
-			componentdeque.clear();
-			componentdeque.shrink_to_fit();
-		}
-	}
-
-	/// <summary>
-	/// Deletes element at position. 
-	/// Set Immediate to true if you don't want to check if the entity has a comoonent.
-	/// </summary>
-	/// <typeparam name="T">Must have a base class of Component</typeparam>
-	/// <param name="entityId">Id of given entity</param>
-	template<class T>
-	inline void ISystem<T>::destroyComponentAt(int entityId, int position, bool immediate)
-	{
-		if (!immediate)
-		{
-			if (!hasComponent(entityId))
-			{
-				return;
-			}
-		}
-		// Cache optimisation
-		std::vector<T>& componentdeque = entities[entityId];
-
-		// Check is valid position
-		if (componentdeque.size() < position + 1)
-		{
-			return;
-		}
-
-		componentdeque.erase(componentdeque.begin() + position);
-	}
-
-	/// <summary>
-	/// Deletes all components and removes entity from map without assigning objects to a pool.
-	/// Set Immediate to true if you don't want to check if the entity has a comoonent.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <param name="entityId"></param>
-	/// <returns></returns>
-	template<class T>
-	inline void ISystem<T>::destroyComponents(int entityId, bool immediate)
-	{
-		if (!immediate)
-		{
-			if (!hasComponent(entityId))
-			{
-				return;
-			}
-		}
-		entities[entityId].clear();
-		
-	}
-
-	/// <summary>
-	/// Deletes all components and removes entity from map without assigning objects to a pool 
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <param name="entityId"></param>
-	/// <returns></returns>
-	template<class T>
-	inline void ISystem<T>::cleanUpEntities()
-	{
-		typename std::map<int, std::vector<T> >::iterator it = entities.begin();
-		typename std::map<int, std::vector<T> >::iterator next = entities.begin();
-
-		for (; it != entities.end(); )
-		{
-			if (it->second.size() == 0)
-			{
-				entities.erase(it++);
-			}
-			else
-			{
-				it++;
-			}
-		}
-		if (entities.empty())
-		{
-			std::map<int, std::vector<T> > empty = std::map<int, std::vector<T> >();
-			entities.swap(empty);
-		}
-	}
-
-	/// <summary>
-	/// Returns true if a component contains a component of type T
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <param name="entityId"></param>
-	/// <returns></returns>
-	template<class T>
-	inline bool ISystem<T>::hasComponent(int entityId)
-	{
-		typename std::map<int, std::vector<T> >::iterator it = entities.find(entityId);
-
-		if (it == entities.end())
-		{
-			return false;
-		}
-		return true;
-	}
-
-	/// <summary>
-	/// Returns the first component of type T attached to an entity.
-	/// If no component is attached then a component will be added and then returned.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <returns></returns>
-	template<class T>
-	inline T& ISystem<T>::getComponent(int entityId)
-	{
-		if (!hasComponent(entityId))
-		{
-			addComponent(entityId);
-		}
-
-		return entities[entityId].at(0);
-	}
-
-	/// <summary>
-	/// Returns a vector of all components attached to an entity. 
-	/// If no components are added to an id then a component is added and then returned.
-	/// </summary>
-	/// <typeparam name="T"></typeparam>
-	/// <returns></returns>
-	template<class T>
-	inline std::vector<T>& ISystem<T>::getComponents(int entityId)
-	{
-		if (!hasComponent(entityId))
-		{
-			addComponent(entityId);
-		}
-
-		return entities[entityId];
-	}
-
-	/// <summary>
-	///	Returns current size of recycablePool
-	/// </summary>
-	template<class T>
-	inline int ISystem<T>::getPoolSize()
-	{
-		return getRecycalblePool().size();
-	}
-
-	/// <summary>
-	///	Sets Maximum Size of the Pool. Defaults at 10000.
-	/// </summary>
-	template<class T>
-	inline void ISystem<T>::setPoolMaximumSize(int maximumSize)
-	{
-		maxPoolSize = maximumSize;
-	}
-
-	/// <summary>
-	/// Returns reference to ISystem entites.
-	/// Entities are stored in a map with the Key being an int to identify entites, 
-	/// value is the components considered attached to an enitity. 
-	/// </summary>
-	template<class T>
-	inline std::map<int, std::vector<T>>& ISystem<T>::getEntities()
-	{
-		return entities;
-	}
-
-	/// <summary>
-	/// Returns reference to the recycablePool member variable.
-	/// </summary>
-	/// <param name=""></param>
-	/// <returns></returns>
-	template<class T>
-	inline std::deque<T>& ISystem<T>::getRecycalblePool()
-	{
-		return recycablePool;
-	}
-
-	/// <summary>
-	/// Resets pool of ISystem to size 0 and frees it from memory
-	/// </summary>
-	/// <param name=""></param>
-	/// <returns></returns>
-	template<class T>
-	inline void ISystem<T>::resetPool()
-	{
-		recycablePool.resize(0);
-		recycablePool.shrink_to_fit();
-	}
-} // End ISystem
-
-// Dropped Entity fucntions
 namespace decs
 {
-	// IDs for components
-	static int nextAssignableID = 0;
-	static std::vector<int> customAssignedIds = std::vector<int>();
-
 	/// <summary>
-	/// Returns ID of a new entity then increments next assignable id. Doesn't add containers this needs to be done by
-	/// the user like so:
-	/// Entity e = createNewEnitityID();
-	/// ISystem::addComponent(e);
+	/// This is an inherited class to be used by all Components.
 	/// </summary>
-	/// <param name="immediate">Set to true if you don't want to check if a user defined id is being used by new id</param>
-	/// <returns>id of entity</returns>
-	static int createNewEnitityID(bool immediate)
+	class Component
 	{
-		if (immediate)
-		{
-			return nextAssignableID++;
-		}
-		while (std::find(customAssignedIds.begin(), customAssignedIds.end(), nextAssignableID) == customAssignedIds.end())
-		{
-			nextAssignableID++;
-		}
-		return nextAssignableID++;
+	public:
+		Component();
+		Component(const Component& c);
+
+		virtual ~Component();
+
+		/// <summary>
+		/// Called on construction of new component or when reused 
+		/// from the pool. 
+		/// Default implementation does nothing.
+		/// </summary>
+		virtual void initialise();
+
+		/// <summary>
+		/// Get the entity that the current component belongs to
+		/// </summary>
+		/// <returns>ID tag of component</returns>
+		int belongsToID();
+
+		/// <summary>
+		/// Set the Id tag of component. This is called automatically 
+		/// when a component is constructed or reused from
+		/// the pool
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		void setBelongsToID(int id);
+
+		/// <summary>
+		/// Set whether to component is currently active. If this is 
+		/// set to false the buil in update will skip it on 
+		/// each update cycle until it is turned back on again.
+		/// 
+		/// Is automatically set to true on construction or when 
+		/// recycled from a pool.
+		/// </summary>
+		/// <param name="active">Set whether component is active 
+		/// or not.</param>
+		void setActive(bool active);
+
+		/// <summary>
+		/// Returns whether the component is active or not.
+		/// </summary>
+		/// <returns>Returns whether the component is active 
+		/// or not.</returns>
+		bool isActive();
+
+		/// <summary>
+		/// update method of component. Can be overrided for 
+		/// custom logic. 
+		/// Does nothing otherwise. 
+		/// </summary>
+		virtual void update();
+	protected:
+		int belongsTo = -1;
+		bool activeSelf = true;
+	};
+
+	inline Component::Component()
+	{
+
 	}
 
-	/// <summary>
-	/// This removes a System from Entity::systems vector. 
-	/// Returns true if it is found and erased. False if it is now found.
-	/// Systems are automatically added to the deque on construction. 
-	/// </summary>
-	/// <param name="system"> "The ISystem that you wish to have removed from the deque."</param>
-	/// <returns>int of newly created Entity</returns>
-	static int createNewEnitityWithID(int id, bool immediate)
+	inline Component::Component(const Component& c)
 	{
-		if (immediate)
-		{
-			customAssignedIds.emplace_back(id);
-			return id;
-		}
-		if (std::find(customAssignedIds.begin(), customAssignedIds.end(), id) != customAssignedIds.end())
-		{
-			return -1;
-		}
-		customAssignedIds.emplace_back(id);
-		return id;
+		activeSelf = c.activeSelf;
+		belongsTo = c.belongsTo;
 	}
 
-	/// <summary>
-	/// This removes a System from Entity::systems vector. 
-	/// Returns true if it is found and erased. False if it is now found.
-	/// Systems are automatically added to the deque on construction. 
-	/// </summary>
-	/// <param name="system"> "The ISystem that you wish to have removed from the deque."</param>
-	/// <returns>true on success, false on failure</returns>
-	static bool removeSystem(ISystemBase& system)
+	inline Component::~Component()
 	{
-		int size = systems.size();
 
-		for (int i = 0; i < size; i++)
-		{
-			if (system.getSystemID() == systems.at(i).get().getSystemID())
-			{
-				systems.erase(systems.begin() + i);
-				return true;
-			}
-		}
-		return false;
 	}
 
-	/// <summary>
-	/// Calls ISystem::removeComponents on the given entity ID by default. Set to false to call
-	/// ISystem::destroyComponents.
-	/// </summary>
-	/// <param name="entityID">ID of entity that is being destroyed.</param>
-	/// <returns></returns>
-	/// <param name="poolComponents">True by default, set to false to call the destructor instead of pooling.</param>
-	/// <returns></returns>
-	static void destroyEntity(int entityID,bool skipCustomIDCheck = false ,bool poolComponents = true)
+	inline void Component::initialise()
 	{
-		int size = systems.size();
 
-		for (int i = 0; i < size; i++)
-		{
-			if (poolComponents)
-			{
-				systems.at(i).get().removeComponents(entityID);
-				continue;
-			}
-			systems.at(i).get().destroyComponents(entityID);
-		}
-
-		// check customAssignableID to free it for reuse
-		if (skipCustomIDCheck)
-		{
-			return;
-		}
-
-		size = customAssignedIds.size();
-		for (int i = 0; i < size; i++)
-		{
-			if (customAssignedIds.at(i) == entityID)
-			{
-				customAssignedIds.erase(customAssignedIds.begin() + i);
-				return;
-			}
-		}
 	}
-} // End Dropped Entity Functions
+
+	inline int Component::belongsToID()
+	{
+		return belongsTo;
+	}
+
+	inline void Component::update()
+	{
+		// Does nothing if not implemented
+	}
+
+	inline void Component::setBelongsToID(int id)
+	{
+		belongsTo = id;
+	}
+
+	inline void Component::setActive(bool active)
+	{
+		activeSelf = active;
+	}
+
+	inline bool Component::isActive()
+	{
+		return activeSelf;
+	}
+} // End Component
