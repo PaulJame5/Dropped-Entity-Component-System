@@ -1,83 +1,91 @@
-#include <iostream>
-#include "DerivedSystem.h"
+#include "dcs.h"
+#include "TestSystem.h"
 #include "Timer.h"
-#include "decs.h"
-#include <string>
 
-void TestAddDefault(); 
+void TestAddDefault();
 void TestAddPooling();
 void TestAddCopy();
 void TestRemove();
 void TestDelete();
 void TestUpdate();
+void TestRandomAccess();
 
+TestSystem testSystem;
 
-DerivedSystem derivedSystem;
-int amountOfComponents = 1000000;
+int amountOfComponents = 100000;
 int amountOfTests = 100;
 
 int main()
 {
-
-	system("pause");
-	derivedSystem.setPoolMaximumSize(amountOfComponents);
 	Timer addDefault = Timer("Add Default");
-	Timer remove = Timer("Remove");
+	Timer removeWithID = Timer("Remove");
 	Timer addFromPool = Timer("Add From Pool");
 	Timer deleteComponent = Timer("Delete");
 	Timer passCopyTimer = Timer("Construct Copy");
 	Timer updateTimer = Timer("Update");
+	Timer randomAccessTimer = Timer("Random Access");
 
 
-
+	testSystem.reserveComponentCapacity(amountOfComponents);
+	testSystem.reserveIDCapacity(amountOfComponents);
 	for (int i = 0; i < amountOfTests; i++)
 	{
-		// Remove before starting again
-		TestDelete();
-
-		addDefault.Start();
-		TestAddDefault();
-		addDefault.Stop();
-
-		remove.Start();
-		TestRemove();
-		remove.Stop();
-
-		addFromPool.Start();
-		TestAddPooling();
-		addFromPool.Stop();
-
-		deleteComponent.Start();
-		TestDelete();
-		deleteComponent.Stop();
 
 		passCopyTimer.Start();
 		TestAddCopy();
 		passCopyTimer.Stop();
 
+		deleteComponent.Start();
+		TestDelete();
+		deleteComponent.Stop();
+
+		decs::World::destroyOrphanedEntities();
+		decs::World::destroyMarked();
+
+		addDefault.Start();
+		TestAddDefault();
+		addDefault.Stop();
+
+		removeWithID.Start();
+		TestRemove();
+		removeWithID.Stop();
+
+		addFromPool.Start();
+		TestAddPooling();
+		addFromPool.Stop();
+
 		updateTimer.Start();
 		TestUpdate();
 		updateTimer.Stop();
 
+		randomAccessTimer.Start();
+		TestRandomAccess();
+		randomAccessTimer.Stop();
+
+		decs::World::destroyAllEntities(false);
+		decs::World::destroyMarked();
+		testSystem.clear();
+
+
 		std::cout << "finished iter: " << i << std::endl;
 	}
-	addDefault.~Timer();
-	remove.~Timer();
-	addFromPool.~Timer();
-	deleteComponent.~Timer();
-	passCopyTimer.~Timer();
-	updateTimer.~Timer();
+	addDefault.PrintResults();
+	removeWithID.PrintResults();
+	addFromPool.PrintResults();
+	deleteComponent.PrintResults();
+	passCopyTimer.PrintResults();
+	updateTimer.PrintResults();
+	randomAccessTimer.PrintResults();
 
 
 	system("pause");
-	return 0;
 }
 
 void TestAddDefault()
 {
 	for (int i = 0; i < amountOfComponents; i++)
 	{
-		derivedSystem.addComponent(i);
+		testSystem.addComponentWithID(decs::World::createNewID());
 	}
 }
 
@@ -85,43 +93,47 @@ void TestAddPooling()
 {
 	for (int i = 0; i < amountOfComponents; i++)
 	{
-		derivedSystem.addComponent(i);
+		// We know the ids are between 0 & 99999
+		testSystem.addComponentWithID(i);
 	}
 
 }
 
 void TestAddCopy()
 {
-	// Stuff
 	for (int i = 0; i < amountOfComponents; i++)
 	{
-		DerivedComponent derivedComp;
-		derivedSystem.addComponent(i, derivedComp);
+		TestComponent copy;
+		testSystem.addComponentValuesWithID(decs::World::createNewID(), copy);
 	}
 }
 
 void TestRemove()
 {
-	// Stuff
 	for (int i = 0; i < amountOfComponents; i++)
 	{
-		derivedSystem.removeComponents(i, true);
+		testSystem.removeAllComponentsWithID(i);
 	}
 }
 
 void TestDelete()
 {
-	// Stuff
 	for (int i = 0; i < amountOfComponents; i++)
 	{
-		derivedSystem.destroyComponents(i, true);
+		testSystem.destroyAllComponentsWithID(i);
 	}
-	derivedSystem.cleanUpEntities();
-
 }
 
 
 void TestUpdate()
 {
-	derivedSystem.update();
+	testSystem.update();
+}
+
+void TestRandomAccess()
+{
+	for (int i = 0; i < amountOfComponents; i++)
+	{
+		testSystem.getPtrComponentWithID(i);
+	}
 }
