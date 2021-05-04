@@ -51,7 +51,8 @@ namespace decs
 		/// Best case O(1), worst case O(N) based on complexity of copy constructor.
 		/// </summary>
 		/// <param name="id">ID of component to perform removal/deletion on.</param>
-		void rem(int id);
+		/// <param name="index">Index position of component to perform removal/deletion on.</param>
+		void rem(int id, int index = 0);
 
 	public:
 		SparseSet();
@@ -82,7 +83,12 @@ namespace decs
 		/// <returns>Returns size of used components in dense list.</returns>
 		int size();
 
+		/// <summary>
+		/// Returns the amount of IDs in use. Highest id that can be used would be numberOfIDs - 1.
+		/// </summary>
+		/// <returns>Returns the amount of IDs in use.</returns>
 		int numberOfIDs();
+
 		/// <summary>
 		/// Returns size of dense list both active and inactive.
 		/// </summary>
@@ -182,8 +188,8 @@ namespace decs
 		/// Emplaces component to end of dense list with given id.
 		/// </summary>
 		/// <param name="id">ID of component to be emplaced</param>
-		/// <param name="copy">Component to have it's values emplaced.</param>
-		void emplace(const int id, T&& copy);
+		/// <param name="emplaced">Component to have it's values emplaced.</param>
+		void emplace(const int id, T&& emplaced);
 
 		/// <summary>
 		/// Inserts a copy of components values to the end of dense list with given id.
@@ -197,14 +203,23 @@ namespace decs
 		/// </summary>
 		/// <param name="id">ID tag of component to be destroyed.</param>
 		/// <returns>True if component is destroyed, false if nothing is destroyed.</returns>
-		bool erase(const int id);
+		bool eraseWithID(const int id);
 
 		/// <summary>
 		/// Destroys all component with a given id.
 		/// </summary>
 		/// <param name="id">ID of components to be destroyed.</param>
 		/// <returns>True if components are destroyed, false if nothing is destroyed.</returns>
-		bool eraseAll(const int id);
+		bool eraseAllWithID(const int id);
+
+		/// <summary>
+		/// Destroys component with id tag at the given index. If component can't be found this
+		/// does nothing.
+		/// </summary>
+		/// <param name="id"></param>
+		/// <param name="index"></param>
+		/// <returns></returns>
+		bool eraseWithIDAtIndex(const int id, int index);
 
 		/// <summary>
 		/// Removes first component found closest to the beginning of the dense list. Removed component
@@ -222,6 +237,16 @@ namespace decs
 		bool removeAllWithID(const int id);
 
 		/// <summary>
+		/// Removes all components with given id at index based on position closest
+		/// to dense list begin. Removed components are moved to a pool.
+		/// If index isn't found this will return false.
+		/// </summary>
+		/// <param name="id">ID tag of component to be removed.</param>
+		/// <param name="index">Index of component to be removed.</param>
+		/// <returns>True if component removed, false if none are removed.</returns>
+		bool removeWithIDAtIndex(const int id, const int index);
+
+		/// <summary>
 		/// Returns the number of components that share the given id.
 		/// </summary>
 		/// <param name="id">ID of components you want to check.</param>
@@ -232,7 +257,7 @@ namespace decs
 		/// Returns the number of components that are able to run update in dense list.
 		/// </summary>
 		/// <returns>Number of components that can update in dense list.</returns>
-		int numberOfActiveComponents();
+		int getNumberOfActiveComponents();
 
 		/// <summary>
 		/// Runs update on every active component in dense list.
@@ -360,6 +385,11 @@ namespace decs
 	template<class T>
 	inline bool SparseSet<T>::has(const int id)
 	{
+		if (id < 0)
+		{
+			return false;
+		}
+
 		if (id >= capacity_sparse_vector)
 		{
 			return false;
@@ -382,6 +412,10 @@ namespace decs
 	template<class T>
 	inline void SparseSet<T>::insert(const int id)
 	{
+		if (id < 0)
+		{
+			return;
+		}
 		if (id >= capacity_sparse_vector)
 		{
 			reserveIDCapacity(id + 1);
@@ -478,14 +512,19 @@ namespace decs
 	}
 
 	template<class T>
-	inline void SparseSet<T>::emplace(const int id, T&& copy)
+	inline void SparseSet<T>::emplace(const int id, T&& emplaced)
 	{
+		if (id < 0)
+		{
+			return;
+		}
+
 		if (id >= capacity_sparse_vector)
 		{
 			reserveIDCapacity(id + 1);
 		}
 
-		dense.emplace_back(copy);
+		dense.emplace_back(emplaced);
 		dense[size_dense_vector].setBelongsToID(id);
 		sparse.at(id).push_back(size_dense_vector);
 		++size_dense_vector;
@@ -494,6 +533,11 @@ namespace decs
 	template<class T>
 	inline void SparseSet<T>::insertCopy(const int id, T& copy)
 	{
+		if (id < 0)
+		{
+			return;
+		}
+
 		if (id >= capacity_sparse_vector)
 		{
 			reserveIDCapacity(id + 1);
@@ -506,20 +550,18 @@ namespace decs
 	}
 
 	template<class T>
-	inline bool SparseSet<T>::erase(const int id)
+	inline bool SparseSet<T>::eraseWithID(const int id)
 	{
-		if (!has(id))
+		if (!removeWithID(id))
 		{
 			return false;
 		}
-
-		rem(id);
 		dense.pop_back();
 		return true;
 	}
 
 	template<class T>
-	inline bool SparseSet<T>::eraseAll(const int id)
+	inline bool SparseSet<T>::eraseAllWithID(const int id)
 	{
 		if (!has(id))
 		{
@@ -530,6 +572,17 @@ namespace decs
 			rem(id);
 			dense.pop_back();
 		}
+		return true;
+	}
+
+	template<class T>
+	inline bool SparseSet<T>::eraseWithIDAtIndex(const int id, int index)
+	{
+		if (!removeWithIDAtIndex(id, index))
+		{
+			return false;
+		}
+		dense.pop_back();
 		return true;
 	}
 
@@ -559,6 +612,21 @@ namespace decs
 	}
 
 	template<class T>
+	inline bool SparseSet<T>::removeWithIDAtIndex(const int id, const int index)
+	{
+		if (!has(id))
+		{
+			return false;
+		}
+		if (sparse[id].size() <= index)
+		{
+			return false;
+		}
+		rem(id);
+		return true;
+	}
+
+	template<class T>
 	inline int SparseSet<T>::numberOfComponentsWithID(const int id)
 	{
 		if (!has(id))
@@ -569,7 +637,7 @@ namespace decs
 	}
 
 	template<class T>
-	inline int SparseSet<T>::numberOfActiveComponents()
+	inline int SparseSet<T>::getNumberOfActiveComponents()
 	{
 		return size_dense_vector;
 	}
@@ -630,30 +698,30 @@ namespace decs
 	}
 
 	template<class T>
-	inline void SparseSet<T>::rem(int id)
+	inline void SparseSet<T>::rem(int id, int index)
 	{
-		int pos = sparse.at(id).back();
+		int removedComponentPosition = sparse.at(id).at(index);
 
-		if (pos == size_dense_vector - 1)
+		if (removedComponentPosition == size_dense_vector - 1)
 		{
-			sparse.at(id).pop_back();
+			sparse.at(id).erase(sparse.at(id).begin() + index);
 			--size_dense_vector;
 			return;
 		}
 
-		dense[pos].setActive(false);
+		dense[removedComponentPosition].setActive(false);
 
 		int lastElementBelongID = dense[size_dense_vector - 1].belongsToID();
 
-		sparse[lastElementBelongID].back() = pos;
-		dense[pos] = dense[size_dense_vector - 1];
+		sparse[lastElementBelongID].back() = removedComponentPosition;
+		dense[removedComponentPosition] = dense[size_dense_vector - 1];
 
 		if (sparse[lastElementBelongID].size() > 1)
 		{
 			std::sort(sparse[lastElementBelongID].begin(), sparse[lastElementBelongID].end());
 		}
 
-		sparse.at(id).pop_back();
+		sparse.at(id).erase(sparse.at(id).begin() + index);
 		--size_dense_vector;
 	} // End rem(id);
 
@@ -683,11 +751,11 @@ namespace decs
 
 		virtual int getSystemID() = 0;
 
-		virtual void update() {};
+		virtual void update() = 0;
 
 		virtual int highestIDUsed() = 0;
 
-		virtual int numberOfActiveComponents() = 0;
+		virtual int getNumberOfActiveComponents() = 0;
 
 		virtual void clear() = 0;
 	};
@@ -696,24 +764,122 @@ namespace decs
 
 	inline SystemBase::~SystemBase() {}
 
-	// Storage of existing systems
-	static int assignableSystemID = 0;
-	static std::vector<std::reference_wrapper<SystemBase>> systems = std::vector<std::reference_wrapper<SystemBase>>();
-	static std::deque<int> reusableIds = std::deque<int>();
-	static std::deque<int> destroyListPool = std::deque<int>();
-	static std::deque<int> destroyList = std::deque<int>();
-	static int nextAvailableID = 0;
-	static float deltaTime = 0;
+} // End SystemBase
 
-	// forward declare
-	static void destroy();
+namespace decs
+{
+	class World
+	{
+	private:
+		// Storage of existing systems
+		static int assignableSystemID;
+		static std::vector<std::reference_wrapper<SystemBase>> systems;
 
-	/// <summary>
-	/// Returns ID to be used. Will use one from reusable 
-	/// ids if one is available.
-	/// </summary>
-	/// <returns>Id for use.</returns>
-	static int createNewID()
+		static int nextAvailableID;
+		static std::deque<int> reusableIds;
+
+		static std::deque<int> destroyListPool;
+		static std::deque<int> destroyList;
+
+		static float deltaTime;
+
+	public:
+		/// <summary>
+		/// Used by System automatically upon construction of an System.
+		/// Returns true if it is added successfully, 
+		/// false if it does not get added.
+		/// </summary>
+		/// <param name="system"> "The System that you wish 
+		/// to have added to the deque."</param>
+		/// <returns>description</returns>
+		static bool addSystem(SystemBase& system);
+
+		/// <summary>
+		/// Set new delta time. Do this at the begininng of every frame to make sure your programs are frame rate
+		/// independant;
+		/// </summary>
+		/// <param name="dt">delta time float to be passed</param>
+		static void setDeltaTime(float dt);
+
+		/// <summary>
+		/// Get delta time of current frame
+		/// </summary>
+		static float getDeltaTime();
+		/// <summary>
+		/// Returns ID to be used. Will use one from reusable 
+		/// ids if one is available.
+		/// </summary>
+		/// <returns>Id for use.</returns>
+		static int createNewID();
+
+		/// <summary>
+		/// Returns ID of a new entity then increments next assignable id. 
+		/// This is called by Systems on construction if 
+		/// they have no id assigned to them yet.
+		/// </summary>
+		/// <returns>id of entity</returns>
+		static int createNewSystemID();
+
+		/// <summary>
+		/// Calls update on all systems that have 
+		/// set allowUpdate to true. 
+		/// </summary>
+		static void update();
+
+		/// <summary>
+		/// Marks entity to be destroyed. 
+		/// If using built in update these entites are removed 
+		/// or destroyed at the end of the update cycle.
+		/// </summary>
+		/// <param name="entityID">ID of components to be removed.</param>
+		/// <param name="poolComponents">Whether to store 
+		/// components in a pool or not. True by default.</param>
+		static void destroyEntity(int entityID, bool poolComponents = true);
+
+		/// <summary>
+		/// Marks all ids and components for destruction. 
+		/// If using built in update components will be destroyed at 
+		/// the end of the update cycle.
+		/// </summary>
+		/// <param name="poolComponents">Whether to store 
+		/// components for reuse or not. Set to false by default.</param>
+		static void destroyAllEntities(bool poolComponents = false);
+
+		/// <summary>
+		/// Finds all ids used that have no components and 
+		/// places them into the id pool to be reused.
+		/// </summary>
+		static void destroyOrphanedEntities();
+
+		/// <summary>
+		/// Destroys marked components. This is called automatically 
+		/// with the built in update.
+		/// 
+		/// When using custom updates this needs to be 
+		/// called by the user.
+		/// </summary>
+		static void destroyMarked();
+
+		/// <summary>
+		/// Returns what the next availble id will be but doesn't increment. 
+		/// Instead use World::createNewId() to assign a new id as this will use a pool and
+		/// auto increment to the next available.
+		/// </summary>
+		/// <returns>an int that the next available id will be not including those in the pool</returns>
+		static int getNextAvailableEntityID();
+	};
+
+	inline void World::setDeltaTime(float dt)
+	{
+		deltaTime = dt;
+	}
+
+	inline float World::getDeltaTime()
+	{
+		return deltaTime;
+	}
+
+	inline int World::createNewID()
 	{
 		if (reusableIds.empty())
 		{
@@ -723,15 +889,8 @@ namespace decs
 		reusableIds.pop_back();
 		return returnedID;
 	}
-	/// <summary>
-	/// Used by System automatically upon construction of an System.
-	/// Returns true if it is added successfully, 
-	/// false if it does not get added.
-	/// </summary>
-	/// <param name="system"> "The System that you wish 
-	/// to have added to the deque."</param>
-	/// <returns>description</returns>
-	static bool addSystem(SystemBase& system)
+
+	inline bool World::addSystem(SystemBase& system)
 	{
 		size_t size = systems.size();
 
@@ -746,22 +905,12 @@ namespace decs
 		return true;
 	}
 
-	/// <summary>
-	/// Returns ID of a new entity then increments next assignable id. 
-	/// This is called by Systems on construction if 
-	/// they have no id assigned to them yet.
-	/// </summary>
-	/// <returns>id of entity</returns>
-	static int createNewSystemID()
+	inline int World::createNewSystemID()
 	{
 		return assignableSystemID++;
 	}
 
-	/// <summary>
-	/// Calls update on all systems that have 
-	/// set allowUpdate to true. 
-	/// </summary>
-	static void update()
+	inline void World::update()
 	{
 		size_t size = systems.size();
 		for (int i = 0; i < size; i++)
@@ -769,18 +918,10 @@ namespace decs
 			systems.at(i).get().update();
 		}
 		// Clean up components marked for destruction.
-		destroy();
+		destroyMarked();
 	}
 
-	/// <summary>
-	/// Marks entity to be destroyed. 
-	/// If using built in update these entites are removed 
-	/// or destroyed at the end of the update cycle.
-	/// </summary>
-	/// <param name="entityID">ID of components to be removed.</param>
-	/// <param name="poolComponents">Whether to store 
-	/// components in a pool or not. True by default.</param>
-	static void destroyEntity(int entityID, bool poolComponents = true)
+	inline void World::destroyEntity(int entityID, bool poolComponents)
 	{
 		size_t size = systems.size();
 
@@ -799,14 +940,7 @@ namespace decs
 		}
 	}
 
-	/// <summary>
-	/// Marks all ids and components for destruction. 
-	/// If using built in update components will be destroyed at 
-	/// the end of the update cycle.
-	/// </summary>
-	/// <param name="poolComponents">Whether to store 
-	/// components for reuse or not. Set to false by default.</param>
-	static void destroyAllEntities(bool poolComponents = false)
+	inline void World::destroyAllEntities(bool poolComponents)
 	{
 		size_t systemSize = systems.size();
 		int highestID = 0;
@@ -826,11 +960,7 @@ namespace decs
 		}
 	}
 
-	/// <summary>
-	/// Finds all ids used that have no components and 
-	/// places them into the id pool to be reused.
-	/// </summary>
-	static void destroyOrphanedEntities()
+	inline void World::destroyOrphanedEntities()
 	{
 		size_t systemSize = systems.size();
 		int highestID = 0;
@@ -865,17 +995,9 @@ namespace decs
 			reusableIds.push_back(destroyList.back());
 			destroyList.pop_back();
 		}
-
 	} // End destroyOrphanedentitiies();
 
-	/// <summary>
-	/// Destroys marked components. This is called automatically 
-	/// with the built in update.
-	/// 
-	/// When using custom updates this needs to be 
-	/// called by the user.
-	/// </summary>
-	static void destroy()
+	inline void World::destroyMarked()
 	{
 		while (destroyList.empty() == false)
 		{
@@ -896,7 +1018,20 @@ namespace decs
 			destroyListPool.pop_back();
 		}
 	} // end Destroy();
-} // End SystemBase
+
+	inline int World::getNextAvailableEntityID()
+	{
+		return nextAvailableID;
+	}
+
+	int World::assignableSystemID = 0;
+	std::vector<std::reference_wrapper<SystemBase>> World::systems = std::vector<std::reference_wrapper<SystemBase>>();
+	std::deque<int> World::reusableIds = std::deque<int>();
+	std::deque<int> World::destroyListPool = std::deque<int>();
+	std::deque<int> World::destroyList = std::deque<int>();
+	int World::nextAvailableID = 0;
+	float World::deltaTime = 0;
+}
 
 namespace decs
 {
@@ -911,6 +1046,8 @@ namespace decs
 
 		void addComponentValuesWithID(int id, T& copy);
 
+		void emplaceComponentWithID(int id, T&& emplaced);
+
 		void removeComponentWithID(int id);
 
 		bool removeAllComponentsWithID(int id) override;
@@ -919,7 +1056,11 @@ namespace decs
 
 		bool destroyAllComponentsWithID(int id) override;
 
-		void clear() override { entityManager.clear(); };
+		void replaceComponentWithID(int id, T& replacement);
+
+		void replaceComponentWithIDAtIndex(int id, int index, T& replacement);
+
+		void clear() override;
 
 		bool hasComponentWithID(int id) override;
 
@@ -931,21 +1072,19 @@ namespace decs
 
 		T& getComponentWithIDAtIndex(int id, int index);
 
-		std::vector<T>& getDenseList();
-
 		int componentsSize();
 
 		void reserveIDCapacity(int u);
 
 		void reserveComponentCapacity(int u);
 
-		void clearAll();
-
 		int getNumberOfComponentsWithID(int id);
 
-		int numberOfActiveComponents();
+		int getNumberOfActiveComponents();
 
 		int getSystemID() override;
+
+		std::vector<T>& getDenseList();
 
 		void update() override;
 
@@ -978,8 +1117,8 @@ namespace decs
 		{
 			return;
 		}
-		systemID = decs::createNewSystemID();
-		decs::addSystem(*this);
+		systemID = decs::World::createNewSystemID();
+		decs::World::addSystem(*this);
 
 	}
 
@@ -1018,6 +1157,12 @@ namespace decs
 	}
 
 	template<class T>
+	inline void System<T>::emplaceComponentWithID(int id, T&& emplaced)
+	{
+		entityManager.emplace(id, emplaced);
+	}
+
+	template<class T>
 	void System<T>::removeComponentWithID(int id)
 	{
 		entityManager.removeWithID(id);
@@ -1032,13 +1177,31 @@ namespace decs
 	template<class T>
 	void System<T>::destroyComponentWithID(int id)
 	{
-		entityManager.erase(id);
+		entityManager.eraseWithID(id);
 	}
 
 	template<class T>
 	bool System<T>::destroyAllComponentsWithID(int id)
 	{
-		return entityManager.eraseAll(id);
+		return entityManager.eraseAllWithID(id);
+	}
+
+	template<class T>
+	inline void System<T>::replaceComponentWithID(int id, T& replacement)
+	{
+		entityManager.replace(id, replacement);
+	}
+
+	template<class T>
+	inline void System<T>::replaceComponentWithIDAtIndex(int id, int index, T& replacement)
+	{
+		entityManager.replace(id, index, replacement);
+	}
+
+	template<class T>
+	inline void System<T>::clear()
+	{
+		entityManager.clear();
 	}
 
 	template<class T>
@@ -1066,15 +1229,15 @@ namespace decs
 	}
 
 	template<class T>
-	std::vector<T>& System<T>::getDenseList()
-	{
-		return entityManager.getDenseList();
-	}
-
-	template<class T>
 	T& System<T>::getComponentWithIDAtIndex(int id, int index)
 	{
 		return entityManager.getAtIndex(id, index);
+	}
+
+	template<class T>
+	std::vector<T>& System<T>::getDenseList()
+	{
+		return entityManager.getDenseList();
 	}
 
 	template<class T>
@@ -1096,15 +1259,9 @@ namespace decs
 	}
 
 	template<class T>
-	int System<T>::numberOfActiveComponents()
+	int System<T>::getNumberOfActiveComponents()
 	{
-		return entityManager.numberOfActiveComponents();
-	}
-
-	template<class T>
-	void System<T>::clearAll()
-	{
-		entityManager.clear();
+		return entityManager.getNumberOfActiveComponents();
 	}
 
 	template<class T>
@@ -1174,7 +1331,7 @@ namespace decs
 		bool isActive();
 
 		/// <summary>
-		/// update method of component. Can be overrided for 
+		/// Update method of component. Can be overrided for 
 		/// custom logic. 
 		/// Does nothing otherwise. 
 		/// </summary>
