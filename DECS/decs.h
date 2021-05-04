@@ -4,13 +4,14 @@
 *
 *	Created by Paul O'Callaghan as part of thesis looking at improving the Entity Component
 *	system by removing the need for entities.
+* 
+*	The library works on the assumption that entities do not exist nor do they need to exist. 
+*	Components other components with a get method removing the need for a middle man or 
+*	entity in our case. 
 *
-*	SparseSet is a modified class based on Sam Griffiths class template of a sparse set of integers
-*	found here: https://gist.github.com/sjgriffiths/06732c6076b9db8a7cf4dfe3a7aed43a
 */
 
 #pragma once
-#include <iostream>
 #include <algorithm>
 #include <deque>
 #include <vector>
@@ -19,11 +20,18 @@
 namespace decs
 {
 	class Component;
-
+	/// <summary>
+	///	SparseSet is a modified class based on Sam Griffiths class 
+	/// template of a sparse set of integers. The original
+	/// can be found here: https://gist.github.com/sjgriffiths/06732c6076b9db8a7cf4dfe3a7aed43a
+	/// 
+	/// Class and Struct Components created must inherit from the Component class to use this.
+	/// </summary>
+	/// <typeparam name="T">User defined class/struct that inherits from decs::Component.</typeparam>
 	template <class T>
 	class SparseSet
 	{
-		static_assert(std::is_convertible<T*, Component*>::value, "class<T> Must inherit from Component");
+		static_assert(std::is_convertible<T*, Component*>::value, "class<T>/struct<T> Must inherit from Component");
 
 	private:
 		static int size_dense_vector;
@@ -285,17 +293,21 @@ namespace decs
 		void print();
 	};
 
+	//Dense set of elements
 	template <class T>
-	std::vector<T> SparseSet<T>::dense = std::vector<T>();	//Dense set of elements
+	std::vector<T> SparseSet<T>::dense = std::vector<T>();
 
+	//Map of elements to dense set indices
 	template <class T>
-	std::vector<std::vector<int>> SparseSet<T>::sparse(0, std::vector<int>(0));	//Map of elements to dense set indices
+	std::vector<std::vector<int>> SparseSet<T>::sparse(0, std::vector<int>(0));
 
+	// Current size (number of elements)
 	template <class T>
-	int SparseSet<T>::size_dense_vector = 0;	// Current size (number of elements)
+	int SparseSet<T>::size_dense_vector = 0;
 
+	//Current capacity (maximum value + 1)
 	template <class T>
-	int SparseSet<T>::capacity_sparse_vector = 0;	//Current capacity (maximum value + 1)
+	int SparseSet<T>::capacity_sparse_vector = 0;
 
 	template<class T>
 	inline SparseSet<T>::SparseSet()
@@ -622,7 +634,7 @@ namespace decs
 		{
 			return false;
 		}
-		rem(id);
+		rem(id, index);
 		return true;
 	}
 
@@ -728,14 +740,15 @@ namespace decs
 } // End sparse
 
 
-// System base
 
 // SystemBase
 namespace decs
 {
-	// Base class of System. Used by Entity for when storing 
-	// a deque of systems to check when deleting entities.
-	// Do not construct or use this by itself as it will do nothing.
+	/// <summary>
+	/// Base class of System. Used by Entity for when storing 
+	/// a deque of systems to check when deleting entities.
+	/// Do not construct or use this by itself as it will do nothing.
+	/// </summary>
 	class SystemBase
 	{
 	public:
@@ -743,20 +756,61 @@ namespace decs
 
 		~SystemBase();
 
+		/// <summary>
+		/// Pure virtual function for remove all components that World 
+		/// needs access to through Systems<T>.
+		/// </summary>
+		/// <param name="entityId"></param>
+		/// <returns>True if components removed false if nothing removed.</returns>
 		virtual bool removeAllComponentsWithID(int entityId) = 0;
 
+		/// <summary>
+		/// Pure virtual function for destroying all 
+		/// components that World needs access to through Systems<T>
+		/// </summary>
+		/// <param name="entityId"></param>
+		/// <returns>True if components destroyed, false otherwise.</returns>
 		virtual bool destroyAllComponentsWithID(int entityId) = 0;
 
+		/// <summary>
+		/// Pure virtual function for checking id has component
+		/// that World needs access to through System<T>
+		/// </summary>
+		/// <param name="entityID">ID tag of component</param>
+		/// <returns>True if component with tag exists, false otherwise.</returns>
 		virtual bool hasComponentWithID(int entityID) = 0;
 
+		/// <summary>
+		/// Pure virtual function that returns id of System<T> 
+		/// that World needs access to.
+		/// </summary>
+		/// <returns>ID of System<T></returns>
 		virtual int getSystemID() = 0;
 
+		/// <summary>
+		/// Pure virtual function for update call that World needs.
+		/// </summary>
 		virtual void update() = 0;
 
+		/// <summary>
+		/// Pure virutal function for finding the highest id in use by
+		/// a entity manager that World needs access to.
+		/// </summary>
+		/// <returns>Id of highest id in use.</returns>
 		virtual int highestIDUsed() = 0;
 
+		/// <summary>
+		/// Pure virtual function that returns number of 
+		/// active components in dense list of entity manager. 
+		/// Used for access by World.
+		/// </summary>
+		/// <returns></returns>
 		virtual int getNumberOfActiveComponents() = 0;
 
+		/// <summary>
+		/// Pure virtual function for clearing entitiy manger that needs
+		/// to be accessed by World.
+		/// </summary>
 		virtual void clear() = 0;
 	};
 
@@ -768,6 +822,9 @@ namespace decs
 
 namespace decs
 {
+	/// <summary>
+	/// World class for assigning new ids and destroying, cleaning up entities.
+	/// </summary>
 	class World
 	{
 	private:
@@ -1031,10 +1088,16 @@ namespace decs
 	std::deque<int> World::destroyList = std::deque<int>();
 	int World::nextAvailableID = 0;
 	float World::deltaTime = 0;
-}
+} // End World class
 
 namespace decs
 {
+	/// <summary>
+	/// System class that inherits struct or class that has inherited from decs::Component.
+	/// This handles all get, find, destroy and remove component logic as well
+	/// as handling the update call.
+	/// </summary>
+	/// <typeparam name="T">Class/Struct that inherits from decs::Component.</typeparam>
 	template<class T>
 	class System : SystemBase
 	{
@@ -1042,52 +1105,189 @@ namespace decs
 	public:
 		System();
 
+		/// <summary>
+		/// Adds default component to id. Sets component to active and then calls 
+		/// initialise.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
 		void addComponentWithID(int id);
 
+		/// <summary>
+		/// Pushes back component to of id index position.
+		/// Does not initialise or set component to active.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		/// <param name="copy">Component values to push back.</param>
 		void addComponentValuesWithID(int id, T& copy);
 
+		/// <summary>
+		/// Emplaces values of component to back of id indexed position.
+		/// Does not initialise or set component to active.
+		/// </summary>
+		/// <param name="id">ID tag of compponent.</param>
+		/// <param name="emplaced">Component values to emplace back.</param>
 		void emplaceComponentWithID(int id, T&& emplaced);
 
+		/// <summary>
+		/// Marks component first found in dense list for removal
+		/// into a pool.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
 		void removeComponentWithID(int id);
 
+		/// <summary>
+		/// Marks components with id tag at given index for removal into
+		/// a pool. Does nothing if indexed position doesn't exist.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		/// <param name="index">Index position of component.</param>
+		void removeComponentWithIDAtIndex(int id, int index);
+
+		/// <summary>
+		/// Marks all components found with id for removal into a pool.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		/// <returns>True if components removed, false otherwise.</returns>
 		bool removeAllComponentsWithID(int id) override;
 
+		/// <summary>
+		/// Marks component with given id at first indexed position
+		/// for destruction. Components are removed at the end of a update cycle.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
 		void destroyComponentWithID(int id);
 
+		/// <summary>
+		/// Marks component with given id at index position
+		/// for destruction. Components are removed at the end of a update cycle.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		/// <param name="index">indexed position of component.</param>
+		void destroyComponentWithIDAtIndex(int id, int index);
+
+		/// <summary>
+		/// Marks all components with given id at index position
+		/// for destruction. Components are removed at the end of a update cycle.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		/// <returns>True if components destroyed, false otherwise.</returns>
 		bool destroyAllComponentsWithID(int id) override;
 
+		/// <summary>
+		/// Replaces values of component with id at first found 
+		/// component. If compoenent does not exists this does nothing.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		/// <param name="replacement">Values to replace compoennt with.</param>
 		void replaceComponentWithID(int id, T& replacement);
 
+		/// <summary>
+		/// Replaces values of component with id at index position with passed 
+		/// component. If compoenent does not exists this does nothing.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		/// <param name="index">Index position of component.</param>
+		/// <param name="replacement">Values to replace compoennt with.</param>
 		void replaceComponentWithIDAtIndex(int id, int index, T& replacement);
 
+		/// <summary>
+		/// Clears dense and sparse lists in entity manager.
+		/// </summary>
 		void clear() override;
 
+		/// <summary>
+		/// Checks if component with id exists.
+		/// </summary>
+		/// <param name="id">ID tag of component</param>
+		/// <returns>False if component does not exist, true otherwise.</returns>
 		bool hasComponentWithID(int id) override;
 
+		/// <summary>
+		/// Returns ponter to first found component. Returns
+		/// nullptr if component is not found.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		/// <returns>Pointer to component. Nullptr if component not found.</returns>
 		T* getPtrComponentWithID(int id);
 
+		/// <summary>
+		/// Returns pointer to component with id at indexed position.
+		/// Returns nullptr if component is not found.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		/// <param name="index">Index position of component.</param>
+		/// <returns>Pointer to component. Nullptr if component not found.</returns>
 		T* getPtrComponentWithIDAtIndex(int id, int index);
 
+		/// <summary>
+		/// Returns a reference to the first component found with id.
+		/// Will result in undefined behaviour if the component does
+		/// not exist.
+		/// </summary>
+		/// <param name="id">ID tag of the component</param>
+		/// <returns>Reference to first found component with ID.</returns>
 		T& getComponentWithID(int id);
 
+		/// <summary>
+		/// Returns reference to component at index of id. 
+		/// Will result in undefined behaviour if component does not exist.
+		/// </summary>
+		/// <param name="id">ID tag of component.</param>
+		/// <param name="index">Index of component to id.</param>
+		/// <returns>Reference to component at index with id.</returns>
 		T& getComponentWithIDAtIndex(int id, int index);
 
-		int componentsSize();
-
+		/// <summary>
+		/// Reserves sparse id size. If u is smaller than sparse capacity
+		/// this does nothing.
+		/// </summary>
+		/// <param name="u">Reserve size you wise to set sparse to.</param>
 		void reserveIDCapacity(int u);
 
+		/// <summary>
+		/// Reserve the size of dense list capacity. If u is smaller than current
+		/// capacity this does nothing.
+		/// </summary>
+		/// <param name="u">Reserve size you wish to set dense list as.</param>
 		void reserveComponentCapacity(int u);
 
+		/// <summary>
+		/// Returns the amount of components with a given id.
+		/// </summary>
+		/// <param name="id">ID tag of components</param>
+		/// <returns>Amount of components with a given id.</returns>
 		int getNumberOfComponentsWithID(int id);
 
+		/// <summary>
+		/// Returns the number of components in use by dense pool not including
+		/// pooled components.
+		/// </summary>
+		/// <returns>Amount of active/used components.</returns>
 		int getNumberOfActiveComponents();
 
+		/// <summary>
+		/// Returns id of the system in use.
+		/// </summary>
+		/// <returns>System id.</returns>
 		int getSystemID() override;
 
+		/// <summary>
+		/// Returns a reference to dense list of components both used and pooled.
+		/// </summary>
+		/// <returns>Vector reference to dense list of all components.</returns>
 		std::vector<T>& getDenseList();
 
+		/// <summary>
+		/// Update loop of components in entity manager.
+		/// </summary>
 		void update() override;
 
+		/// <summary>
+		/// Set whether you would like the system to run update on each
+		/// component or not. For systems that have no update
+		/// logic it's best to set this to false.
+		/// </summary>
+		/// <param name="allow">True allows update, false skips update.</param>
 		void setCanUpdate(bool allow);
 
 	protected:
@@ -1097,8 +1297,11 @@ namespace decs
 		static int systemID;
 		static bool allowUpdate;
 
+		/// <summary>
+		/// Returns the highest id in use by the system.
+		/// </summary>
+		/// <returns>Returns the highest id in use by the system.</returns>
 		int highestIDUsed() override;
-
 	};
 
 	template<class T>
@@ -1169,6 +1372,12 @@ namespace decs
 	}
 
 	template<class T>
+	inline void System<T>::removeComponentWithIDAtIndex(int id, int index)
+	{
+		entityManager.removeWithIDAtIndex(id, index);
+	}
+
+	template<class T>
 	bool System<T>::removeAllComponentsWithID(int id)
 	{
 		return entityManager.removeAllWithID(id);
@@ -1178,6 +1387,12 @@ namespace decs
 	void System<T>::destroyComponentWithID(int id)
 	{
 		entityManager.eraseWithID(id);
+	}
+
+	template<class T>
+	inline void System<T>::destroyComponentWithIDAtIndex(int id, int index)
+	{
+		entityManager.eraseWithIDAtIndex(id, index);
 	}
 
 	template<class T>
@@ -1238,12 +1453,6 @@ namespace decs
 	std::vector<T>& System<T>::getDenseList()
 	{
 		return entityManager.getDenseList();
-	}
-
-	template<class T>
-	int System<T>::componentsSize()
-	{
-		return entityManager.size();
 	}
 
 	template<class T>
