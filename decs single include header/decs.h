@@ -554,8 +554,15 @@ namespace decs
 		{
 			reserveIDCapacity(id + 1);
 		}
-
-		dense.push_back(copy);
+		if (dense.size() <= size_dense_vector)
+		{
+			dense.push_back(copy);
+			dense[size_dense_vector].setBelongsToID(id);
+			sparse.at(id).push_back(size_dense_vector);
+			++size_dense_vector;
+			return;
+		}
+		dense[size_dense_vector] = copy;
 		dense[size_dense_vector].setBelongsToID(id);
 		sparse.at(id).push_back(size_dense_vector);
 		++size_dense_vector;
